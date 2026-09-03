@@ -146,10 +146,12 @@ source.
 ## Accessing MT5
 
 After a successful run, the script prints the noVNC URL(s) it's reachable
-at — the machine's hostname, plus every non-loopback IPv4 and IPv6 address
-it has (link-local `fe80::` addresses are skipped, since they need a zone
-id that a plain URL can't express). Open one of those in a browser to get
-the desktop; the VNC password is set on first connection.
+at, e.g. `http://<host>:6080/vnc.html` — one for the machine's hostname,
+plus one for every non-loopback IPv4 and IPv6 address it has (link-local
+`fe80::` addresses are skipped, since they need a zone id that a plain URL
+can't express). Copy one of those printed URLs into a browser on your
+workstation (not on the VM itself) to reach the MT5 desktop over noVNC;
+the VNC password is set on first connection.
 
 ## Logs
 
