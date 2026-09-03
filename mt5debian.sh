@@ -16,7 +16,10 @@ trap cleanup_temp_files EXIT
 usage() {
     cat << 'USAGE'
 Usage: mt5debian.sh [-p|--password password] [-P|--viewonly-password password]
-                    [-w|--wine-version stable|staging|devel] [--purge] [-h|--help]
+                    [-w|--wine-version stable|staging|devel]
+                    [-n|--novnc-port port] [-b|--bridge-port port]
+                    [-v|--vnc-port port]
+                    [--purge] [-h|--help]
   -p, --password             VNC password. Sets it non-interactively,
                               overwriting any existing one. If omitted,
                               an existing password is left alone; if none
@@ -27,6 +30,17 @@ Usage: mt5debian.sh [-p|--password password] [-P|--viewonly-password password]
                               with -p/--password.
   -w, --wine-version         Force the Wine channel (stable, staging, or
                               devel), overriding the default (staging).
+  -n, --novnc-port           noVNC web port, overriding the default
+                              (6080).
+  -b, --bridge-port          pymt5linux bridge port, overriding the
+                              default (8001).
+  -v, --vnc-port             Raw VNC (RFB) port, overriding the default
+                              (5901). Must be > 5900 — internally mapped
+                              to a TigerVNC display number as port-5900,
+                              e.g. 5901 is display :1. Also change
+                              -n/--novnc-port if running a second copy on
+                              the same host, since noVNC connects to this
+                              port on localhost.
   --purge                    Kill any running Wine process for this
                               prefix and delete it ($HOME/.mt5), then
                               continue as a clean reinstall. Does not
@@ -36,19 +50,25 @@ Usage: mt5debian.sh [-p|--password password] [-P|--viewonly-password password]
 USAGE
 }
 
-PARSED_OPTS=$(getopt --options p:P:w:h --longoptions password:,viewonly-password:,wine-version:,purge,help --name "mt5debian.sh" -- "$@") \
+PARSED_OPTS=$(getopt --options p:P:w:n:b:v:h --longoptions password:,viewonly-password:,wine-version:,novnc-port:,bridge-port:,vnc-port:,purge,help --name "mt5debian.sh" -- "$@") \
     || { usage; exit 1; }
 eval set -- "$PARSED_OPTS"
 
 VNC_PASSWORD=""
 VNC_VIEWONLY_PASSWORD=""
 WINE_VERSION_OVERRIDE=""
+NOVNC_PORT_OVERRIDE=""
+MT5SERVER_PORT_OVERRIDE=""
+VNC_PORT_OVERRIDE=""
 PURGE=""
 while true; do
     case "$1" in
         -p|--password) VNC_PASSWORD="$2"; shift 2 ;;
         -P|--viewonly-password) VNC_VIEWONLY_PASSWORD="$2"; shift 2 ;;
         -w|--wine-version) WINE_VERSION_OVERRIDE="$2"; shift 2 ;;
+        -n|--novnc-port) NOVNC_PORT_OVERRIDE="$2"; shift 2 ;;
+        -b|--bridge-port) MT5SERVER_PORT_OVERRIDE="$2"; shift 2 ;;
+        -v|--vnc-port) VNC_PORT_OVERRIDE="$2"; shift 2 ;;
         --purge) PURGE=1; shift ;;
         -h|--help) usage; exit 0 ;;
         --) shift; break ;;
@@ -63,6 +83,25 @@ case "$WINE_VERSION_OVERRIDE" in
         exit 1
         ;;
 esac
+
+is_valid_port() {
+    [[ "$1" =~ ^[0-9]+$ ]] && [ "$1" -ge 1 ] && [ "$1" -le 65535 ]
+}
+
+if [ -n "$NOVNC_PORT_OVERRIDE" ] && ! is_valid_port "$NOVNC_PORT_OVERRIDE"; then
+    echo "ERROR: -n/--novnc-port must be a port number 1-65535 (got: $NOVNC_PORT_OVERRIDE)"
+    exit 1
+fi
+
+if [ -n "$MT5SERVER_PORT_OVERRIDE" ] && ! is_valid_port "$MT5SERVER_PORT_OVERRIDE"; then
+    echo "ERROR: -b/--bridge-port must be a port number 1-65535 (got: $MT5SERVER_PORT_OVERRIDE)"
+    exit 1
+fi
+
+if [ -n "$VNC_PORT_OVERRIDE" ] && { ! is_valid_port "$VNC_PORT_OVERRIDE" || [ "$VNC_PORT_OVERRIDE" -le 5900 ]; }; then
+    echo "ERROR: -v/--vnc-port must be a port number > 5900 (got: $VNC_PORT_OVERRIDE)"
+    exit 1
+fi
 
 if [ -n "$PURGE" ]; then
     echo "Purging existing Wine prefix ($HOME/.mt5)"
@@ -85,7 +124,31 @@ URL_WEBVIEW="https://go.microsoft.com/fwlink/p/?LinkId=2124703"
 URL_PYTHON="https://www.python.org/ftp/python/3.13.15/python-3.13.15-amd64.exe"
 
 # noVNC web port — browse to http://localhost:$NOVNC_PORT/vnc.html
-NOVNC_PORT="6080"
+# Override with -n/--novnc-port.
+if [ -n "$NOVNC_PORT_OVERRIDE" ]; then
+    NOVNC_PORT="$NOVNC_PORT_OVERRIDE"
+else
+    NOVNC_PORT="6080"
+fi
+
+# Raw VNC (RFB) port. Override with -v/--vnc-port. TigerVNC addresses
+# displays, not ports directly — port 5900+N is display :N — so the
+# display number used for vncserver/DISPLAY throughout is derived from
+# this rather than hardcoded, letting a second copy of this script run
+# under a different OS user on the same host without colliding on
+# either the display number or the port.
+if [ -n "$VNC_PORT_OVERRIDE" ]; then
+    VNC_PORT="$VNC_PORT_OVERRIDE"
+else
+    VNC_PORT="5901"
+fi
+VNC_DISPLAY="$((VNC_PORT - 5900))"
+
+# Suffixed by VNC_PORT, not a fixed name: /tmp is shared machine-wide, so
+# a second copy of this script running under another OS user would
+# otherwise share this path too. NOVNC_PID/its log and PYMT5LINUX_LOG
+# below use the same VNC_PORT suffix for the same reason.
+MT5_TERMINAL_LOG="/tmp/mt5-terminal-$VNC_PORT.log"
 
 . /etc/os-release
 
@@ -98,8 +161,17 @@ else
 fi
 
 # mt5linux bridge — lets external Python code drive the terminal via RPyC.
-# Port matches the FreeBSD mt5jail bridge for consistency.
-MT5SERVER_PORT="8001"
+# Port matches the FreeBSD mt5jail bridge for consistency by default.
+# Override with -b/--bridge-port.
+if [ -n "$MT5SERVER_PORT_OVERRIDE" ]; then
+    MT5SERVER_PORT="$MT5SERVER_PORT_OVERRIDE"
+else
+    MT5SERVER_PORT="8001"
+fi
+# Suffixed by VNC_PORT (not MT5SERVER_PORT) for consistency with
+# MT5_TERMINAL_LOG/NOVNC_PID above/below: same /tmp-is-shared-machine-wide
+# reason.
+PYMT5LINUX_LOG="/tmp/pymt5linux-server-$VNC_PORT.log"
 # RPyC has no built-in auth, so don't bind wider than you need. Defaults to
 # loopback only. If the mt5jail-side client (or anything else) needs to
 # reach this bridge across the network, set this to this VM's specific
@@ -278,7 +350,7 @@ if [ -n "$VNC_PASSWORD" ]; then
     fi
 fi
 
-echo "Start Xvnc on display :1 (no window manager)"
+echo "Start Xvnc on display :$VNC_DISPLAY (no window manager)"
 # -kill legitimately fails (nonzero) when no prior session is running —
 # that's the common case on a fresh box, not an error.
 # -depth 24, not 16: costs +2MB, not worth banding risk on MT5 charts.
@@ -286,14 +358,18 @@ echo "Start Xvnc on display :1 (no window manager)"
 # for both have changed across versions/distros, and some packaged
 # versions disagree with each other about the default — passing both
 # explicitly sidesteps all of that.
-vncserver -kill :1 2>/dev/null || true
-vncserver :1 -geometry 1280x800 -depth 24 -localhost no -xstartup "$XSTARTUP" -PasswordFile "$VNC_PASSWD_FILE"
-export DISPLAY=:1
+vncserver -kill ":$VNC_DISPLAY" 2>/dev/null || true
+vncserver ":$VNC_DISPLAY" -geometry 1280x800 -depth 24 -localhost no -xstartup "$XSTARTUP" -PasswordFile "$VNC_PASSWD_FILE"
+export DISPLAY=":$VNC_DISPLAY"
 export WINEPREFIX="$HOME/.mt5"
 
 echo "Start noVNC on port $NOVNC_PORT"
 NOVNC_DIR="/usr/share/novnc"
-NOVNC_PID="/tmp/novnc.pid"
+# Suffixed by VNC_PORT (not just a fixed name) since /tmp is shared
+# machine-wide — if this script is run under multiple OS users at once
+# (each with their own -v/-n/-b ports), fixed names here would have each
+# instance's stop_by_pidfile/log clobber another's.
+NOVNC_PID="/tmp/novnc-$VNC_PORT.pid"
 stop_by_pidfile "$NOVNC_PID"
 if [ -d "$NOVNC_DIR" ]; then
     # [::] gives dual-stack (v4+v6 on one socket) where IPv6 is available;
@@ -304,7 +380,7 @@ if [ -d "$NOVNC_DIR" ]; then
     else
         NOVNC_BIND="$NOVNC_PORT"
     fi
-    nohup websockify --web="$NOVNC_DIR" "$NOVNC_BIND" localhost:5901 >/tmp/novnc.log 2>&1 &
+    nohup websockify --web="$NOVNC_DIR" "$NOVNC_BIND" "localhost:$VNC_PORT" >"/tmp/novnc-$VNC_PORT.log" 2>&1 &
     echo "$!" > "$NOVNC_PID"
 else
     echo "WARNING: novnc web assets not found at $NOVNC_DIR, adjust path"
@@ -334,22 +410,22 @@ else
     echo "webview2.exe already present, skipping download"
 fi
 
-# Confirms display :1 actually answers before running a Wine step. If Xvnc
-# was killed or crashed (e.g. someone restarted VNC in another terminal
-# mid-run), this restarts it once rather than letting the following Wine
-# command fail silently against a dead display.
+# Confirms display :$VNC_DISPLAY actually answers before running a Wine
+# step. If Xvnc was killed or crashed (e.g. someone restarted VNC in
+# another terminal mid-run), this restarts it once rather than letting
+# the following Wine command fail silently against a dead display.
 wait_for_display() {
     local max_wait=30
     local waited=0
     while ! xdpyinfo >/dev/null 2>&1; do
         waited=$((waited + 2))
         if [ "$waited" -ge "$max_wait" ]; then
-            echo "WARNING: display :1 not responding, restarting Xvnc"
-            vncserver -kill :1 2>/dev/null || true
-            vncserver :1 -geometry 1280x800 -depth 24 -localhost no -xstartup "$XSTARTUP" -PasswordFile "$VNC_PASSWD_FILE" -SecurityTypes VncAuth || true
+            echo "WARNING: display :$VNC_DISPLAY not responding, restarting Xvnc"
+            vncserver -kill ":$VNC_DISPLAY" 2>/dev/null || true
+            vncserver ":$VNC_DISPLAY" -geometry 1280x800 -depth 24 -localhost no -xstartup "$XSTARTUP" -PasswordFile "$VNC_PASSWD_FILE" -SecurityTypes VncAuth || true
             sleep 3
             if ! xdpyinfo >/dev/null 2>&1; then
-                echo "WARNING: display :1 still not responding after restart, proceeding anyway"
+                echo "WARNING: display :$VNC_DISPLAY still not responding after restart, proceeding anyway"
             fi
             return
         fi
@@ -390,7 +466,7 @@ start_pymt5linux() {
 
         if ! kill -0 "$MT5SERVER_PID" 2>/dev/null; then
             echo "ERROR: pymt5linux launcher exited before the port opened"
-            tail -50 /tmp/pymt5linux-server.log
+            tail -50 "$PYMT5LINUX_LOG"
             return 1
         fi
 
@@ -399,7 +475,7 @@ start_pymt5linux() {
     done
 
     echo "ERROR: pymt5linux bridge did not open port $MT5SERVER_PORT within ${timeout}s"
-    tail -50 /tmp/pymt5linux-server.log
+    tail -50 "$PYMT5LINUX_LOG"
     return 1
 }
 
@@ -442,14 +518,14 @@ if pgrep -f '[/\\]terminal64\.exe([[:space:]]|$)' >/dev/null 2>&1; then
     echo "MetaTrader 5 already running, not launching another copy"
 else
     wait_for_display
-    nohup wine "C:\Program Files\MetaTrader 5\terminal64.exe" >/tmp/mt5-terminal.log 2>&1 &
+    nohup wine "C:\Program Files\MetaTrader 5\terminal64.exe" >"$MT5_TERMINAL_LOG" 2>&1 &
 fi
 wait_for_mt5
 # Only reached on success — wait_for_mt5 aborts the script otherwise.
 # MT5 keeps running and writing to this path after deletion (safe on
 # Linux, but you lose the ability to tail it and the space isn't freed
 # until MT5 exits).
-rm -f /tmp/mt5-terminal.log
+rm -f "$MT5_TERMINAL_LOG"
 
 # ------------------------------------------------------------------
 # pymt5linux bridge: Python-in-Wine + MetaTrader5/pymt5linux libraries,
@@ -533,13 +609,13 @@ if wine python --version >/dev/null 2>&1; then
     sleep 1
     wait_for_display
 
-    nohup wine python.exe -m pymt5linux --host "$MT5SERVER_HOST" --port "$MT5SERVER_PORT" python.exe >/tmp/pymt5linux-server.log 2>&1 &
+    nohup wine python.exe -m pymt5linux --host "$MT5SERVER_HOST" --port "$MT5SERVER_PORT" python.exe >"$PYMT5LINUX_LOG" 2>&1 &
     MT5SERVER_PID="$!"
     if start_pymt5linux; then
         # Bridge keeps running and writing to this path after deletion
         # (safe on Linux, but no longer tail-able, space freed only on
         # bridge exit). Kept on failure — that's what tail -50 above reads.
-        rm -f /tmp/pymt5linux-server.log
+        rm -f "$PYMT5LINUX_LOG"
     else
         echo "WARNING: pymt5linux bridge did not come up cleanly, continuing anyway"
     fi
@@ -548,7 +624,7 @@ else
 fi
 
 MT5_HOST="$(hostname -f 2>/dev/null || hostname)"
-echo "noVNC available at http://$MT5_HOST:$NOVNC_PORT/vnc.html (VNC on :5901)"
+echo "noVNC available at http://$MT5_HOST:$NOVNC_PORT/vnc.html (VNC on :$VNC_PORT)"
 
 echo "Also reachable at:"
 while read -r ip; do

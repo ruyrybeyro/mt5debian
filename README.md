@@ -14,8 +14,9 @@ files are skipped, not redone.
 - Installs Wine (staging) from WineHQ's official repo, plus the X11/VNC
   stack (`tigervnc-standalone-server`, `novnc`, `websockify`) and the Mesa
   software-rendering libraries MT5's charts need.
-- Starts Xvnc on display `:1` with no window manager, and noVNC on top of
-  it so you can reach the desktop from a browser.
+- Starts Xvnc (display `:1` / port 5901 by default) with no window
+  manager, and noVNC on top of it so you can reach the desktop from a
+  browser.
 - Downloads and installs the WebView2 Runtime (MT5's Market/news/signals
   panels are a WebView2 view) and MetaTrader 5 itself, inside a dedicated
   Wine prefix (`$HOME/.mt5`).
@@ -110,6 +111,14 @@ Options:
                                      Force the Wine channel, overriding the
                                      default (staging — see Configuration
                                      below).
+-n, --novnc-port port               noVNC web port, overriding the default
+                                     (6080 — see Configuration below).
+-b, --bridge-port port              pymt5linux bridge port, overriding the
+                                     default (8001 — see Configuration
+                                     below).
+-v, --vnc-port port                 Raw VNC (RFB) port, overriding the
+                                     default (5901 — see Configuration
+                                     below).
 --purge                             Kill any running Wine process for this
                                      prefix and delete it ($HOME/.mt5), then
                                      continue as a clean reinstall. Does not
@@ -120,12 +129,15 @@ Options:
 
 ## Configuration
 
-Edit the variables at the top of the script:
+`WINE_VERSION`, `NOVNC_PORT`, `MT5SERVER_PORT`, and `VNC_PORT` can be
+overridden via command-line flags (see Usage above); everything else is a
+variable at the top of the script.
 
 | Variable | Default | Purpose |
 |---|---|---|
 | `WINE_VERSION` | `staging` | Wine channel to install (`stable`, `staging`, or `devel`) — see below |
 | `NOVNC_PORT` | `6080` | noVNC web port |
+| `VNC_PORT` | `5901` | Raw VNC (RFB) port — see below |
 | `MT5SERVER_PORT` | `8001` | `pymt5linux` bridge port |
 | `MT5SERVER_HOST` | `127.0.0.1` | `pymt5linux` bridge bind address — see below |
 
@@ -138,12 +150,49 @@ Edit the variables at the top of the script:
 ./mt5debian.sh --purge -w stable
 ```
 
+### `NOVNC_PORT`, `VNC_PORT`, and `MT5SERVER_PORT`
+
+Override with `-n`/`--novnc-port`, `-v`/`--vnc-port`, and
+`-b`/`--bridge-port`. `VNC_PORT` must be > 5900 — TigerVNC addresses
+displays rather than ports directly (port 5900+N is display `:N`), so the
+display number used throughout is derived from this port.
+
+The main reason to change any of these: running a second, independent copy
+of this script as a different OS user on the same box (see
+[Running multiple copies](#running-multiple-copies) below) — each copy
+needs its own set of ports.
+
+```bash
+./mt5debian.sh -n 6081 -v 5902 -b 8002
+```
+
 ### `MT5SERVER_HOST`
 
 RPyC has no built-in authentication. The bridge defaults to loopback only.
 If another host on your network needs to reach it, set this to this VM's
 specific address (not `0.0.0.0`) and firewall the port to the intended
 source.
+
+## Running multiple copies
+
+Each copy needs its own OS user (own `$HOME`, own Wine prefix) and its own
+`-n`/`-v`/`-b` ports — pick a distinct set of three per user, e.g. user A
+gets the defaults (6080/5901/8001) and user B gets `-n 6081 -v 5902 -b
+8002`. The script's own log/PID files under `/tmp` are already namespaced
+by port, so they won't collide between copies even though `/tmp` itself is
+shared machine-wide.
+
+That's process/filesystem separation by convention (distinct OS users),
+not a hard security boundary — `/proc` is visible across users on a
+default Debian install (`hidepid=0`), so e.g. `pgrep`-based "is MT5
+already running" checks can in principle see another user's process, not
+just your own. Fine for cooperating/trusted users on the same box. If you
+ever need to run this for **mutually untrusted** users, revisit that:
+either mount `/proc` with `hidepid=2`, or move to real isolation
+(a Linux namespace/container per user, or `systemd-nspawn`) rather than
+relying on OS-user separation alone. Not implemented here yet.
+
+## Accessing MT5
 
 ## Accessing MT5
 
@@ -157,11 +206,14 @@ the VNC password is set on first connection.
 
 ## Logs
 
-- `/tmp/novnc.log` — noVNC/websockify
-- `/tmp/mt5-terminal.log` — MT5 terminal stdout/stderr (deleted once MT5 is
-  confirmed running; kept if startup fails)
-- `/tmp/pymt5linux-server.log` — the bridge server (deleted once the bridge
-  port is confirmed open; kept if it fails to come up)
+Filenames are suffixed by `VNC_PORT`, so each copy of the script (see
+[Running multiple copies](#running-multiple-copies)) gets its own:
+
+- `/tmp/novnc-<VNC_PORT>.log` — noVNC/websockify
+- `/tmp/mt5-terminal-<VNC_PORT>.log` — MT5 terminal stdout/stderr (deleted
+  once MT5 is confirmed running; kept if startup fails)
+- `/tmp/pymt5linux-server-<VNC_PORT>.log` — the bridge server (deleted
+  once the bridge port is confirmed open; kept if it fails to come up)
 
 ## Troubleshooting
 
