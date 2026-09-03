@@ -1,11 +1,28 @@
 # mt5debian.sh
 
-Sets up MetaTrader 5 on a headless Debian VM via Wine, with VNC/noVNC
-access and an optional RPyC bridge (via `pymt5linux`) so external Python
-code can drive the running terminal.
+[![Bash](https://img.shields.io/badge/bash-4%2B-blue.svg)](https://www.gnu.org/software/bash/)
+[![Platform](https://img.shields.io/badge/platform-Debian%2012%2F13-red.svg)](https://www.debian.org/)
+[![Wine](https://img.shields.io/badge/wine-staging-orange.svg)](https://www.winehq.org/)
+[![MetaTrader](https://img.shields.io/badge/MetaTrader-5-blue.svg)](https://www.metatrader5.com/)
+[![Bridge](https://img.shields.io/badge/bridge-pymt5linux%20%2F%20RPyC-orange.svg)](https://pypi.org/project/pymt5linux/)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-Idempotent: safe to re-run. Already-installed components and downloaded
-files are skipped, not redone.
+> Headless MetaTrader 5 on Debian via Wine, reachable over noVNC, with a Python bridge to drive it.
+
+`mt5debian.sh` sets up MetaTrader 5 on a headless Debian VM via Wine, with
+VNC/noVNC access and an optional RPyC bridge (via `pymt5linux`) so
+external Python code can drive the running terminal.
+
+Key features:
+
+- One script: installs Wine, VNC/noVNC, WebView2, and MT5 itself
+- Browser-based desktop access over noVNC — no local VNC client needed
+- Optional `pymt5linux` bridge so Linux-side Python can drive the running
+  terminal over RPyC
+- Idempotent — safe to re-run; already-installed components and
+  downloaded files are skipped, not redone
+- Configurable noVNC, VNC, and bridge ports for running multiple copies
+  on one host
 
 ![MetaTrader 5 running on Debian via noVNC](images/mt5screen.png)
 
