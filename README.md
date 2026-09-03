@@ -7,6 +7,8 @@ code can drive the running terminal.
 Idempotent: safe to re-run. Already-installed components and downloaded
 files are skipped, not redone.
 
+![MetaTrader 5 running on Debian via noVNC](images/mt5screen.png)
+
 ## What it does
 
 - Installs Wine (staging) from WineHQ's official repo, plus the X11/VNC
