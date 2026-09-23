@@ -9,7 +9,7 @@ set -Eeuo pipefail
 # scattered after each individual use, which only run if that point in
 # the script is actually reached.
 cleanup_temp_files() {
-    rm -f /tmp/winehq.key /tmp/python-installer.exe mt5setup.exe webview2.exe
+    rm -f /tmp/winehq.key /tmp/python-installer.exe /tmp/mt5setup.exe /tmp/webview2.exe
 }
 trap cleanup_temp_files EXIT
 
@@ -253,19 +253,14 @@ if [ "${#APT_MISSING[@]}" -eq 0 ] && [ -z "$WINE_MISSING" ]; then
 else
     if [ "${#APT_MISSING[@]}" -gt 0 ]; then
         echo "Missing packages: ${APT_MISSING[*]}"
-    fi
-    if [ -n "$WINE_MISSING" ]; then
-        echo "Missing package: winehq-$WINE_VERSION"
-    fi
-    echo "Update package index"
-    sudo apt update
-
-    if [ "${#APT_MISSING[@]}" -gt 0 ]; then
+        echo "Update package index"
+        sudo apt update
         echo "Installing: ${APT_MISSING[*]}"
         sudo apt install -y "${APT_MISSING[@]}"
     fi
 
     if [ -n "$WINE_MISSING" ]; then
+        echo "Missing package: winehq-$WINE_VERSION"
         echo "Choose Wine repo"
 
         if [ "$ID" != "debian" ]; then
@@ -359,7 +354,7 @@ echo "Start Xvnc on display :$VNC_DISPLAY (no window manager)"
 # versions disagree with each other about the default — passing both
 # explicitly sidesteps all of that.
 vncserver -kill ":$VNC_DISPLAY" 2>/dev/null || true
-vncserver ":$VNC_DISPLAY" -geometry 1280x800 -depth 24 -localhost no -xstartup "$XSTARTUP" -PasswordFile "$VNC_PASSWD_FILE"
+vncserver ":$VNC_DISPLAY" -geometry 1280x800 -depth 24 -localhost no -xstartup "$XSTARTUP" -PasswordFile "$VNC_PASSWD_FILE" -SecurityTypes VncAuth
 export DISPLAY=":$VNC_DISPLAY"
 export WINEPREFIX="$HOME/.mt5"
 
@@ -391,7 +386,7 @@ WEBVIEW2_DIR="$HOME/.mt5/drive_c/Program Files (x86)/Microsoft/EdgeWebView/Appli
 
 echo "Download MetaTrader and WebView2 Runtime"
 if [ ! -f "$MT5_EXE" ]; then
-    if ! curl -fsSL "$URL_MT5" -o mt5setup.exe || [ ! -s mt5setup.exe ]; then
+    if ! curl -fsSL "$URL_MT5" -o /tmp/mt5setup.exe || [ ! -s /tmp/mt5setup.exe ]; then
         echo "ERROR: failed to download mt5setup.exe from $URL_MT5. Aborting."
         exit 1
     fi
@@ -402,7 +397,7 @@ fi
 # MT5's terminal embeds a Chromium view (Market tab, news, signals) via
 # WebView2 — without it those panels fail to render.
 if [ ! -d "$WEBVIEW2_DIR" ]; then
-    if ! curl -fsSL "$URL_WEBVIEW" -o webview2.exe || [ ! -s webview2.exe ]; then
+    if ! curl -fsSL "$URL_WEBVIEW" -o /tmp/webview2.exe || [ ! -s /tmp/webview2.exe ]; then
         echo "ERROR: failed to download webview2.exe from $URL_WEBVIEW. Aborting."
         exit 1
     fi
@@ -491,7 +486,7 @@ if [ ! -d "$WEBVIEW2_DIR" ]; then
     # Exit code ignored deliberately: WebView2's bootstrapper can return
     # non-zero on a benign condition (e.g. reboot-suggested) even when
     # the install actually succeeded. Check the real outcome below instead.
-    wine webview2.exe /silent /install || true
+    wine /tmp/webview2.exe /silent /install || true
     if [ ! -d "$WEBVIEW2_DIR" ]; then
         echo "WARNING: WebView2 install did not produce $WEBVIEW2_DIR, continuing anyway"
     fi
@@ -505,7 +500,7 @@ if [ ! -f "$MT5_EXE" ]; then
     # Same reasoning as WebView2 above: mt5setup.exe is a bootstrapper
     # that can exit non-zero on a benign condition even when the actual
     # install succeeded. Check whether $MT5_EXE actually exists instead.
-    wine mt5setup.exe /auto || true
+    wine /tmp/mt5setup.exe /auto || true
     if [ ! -f "$MT5_EXE" ]; then
         echo "WARNING: MetaTrader 5 install did not produce $MT5_EXE, continuing anyway"
     fi

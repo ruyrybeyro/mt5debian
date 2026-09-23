@@ -190,6 +190,11 @@ If another host on your network needs to reach it, set this to this VM's
 specific address (not `0.0.0.0`) and firewall the port to the intended
 source.
 
+Unlike the ports above, this has no `-`/`--` CLI flag — deliberately, so
+that widening the bridge past loopback takes an explicit edit to the
+script rather than a flag someone could pass without realizing what it
+exposes.
+
 ## Running multiple copies
 
 Each copy needs its own OS user (own `$HOME`, own Wine prefix) and its own
@@ -208,8 +213,6 @@ ever need to run this for **mutually untrusted** users, revisit that:
 either mount `/proc` with `hidepid=2`, or move to real isolation
 (a Linux namespace/container per user, or `systemd-nspawn`) rather than
 relying on OS-user separation alone. Not implemented here yet.
-
-## Accessing MT5
 
 ## Accessing MT5
 
