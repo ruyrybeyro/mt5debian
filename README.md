@@ -72,12 +72,16 @@ Run this as a normal, non-root user — not as `root`, and not via `sudo
 script's paths (`$HOME/.mt5`, `$HOME/.config/tigervnc`, the downloaded
 installers) all assume a real user's home directory. `sudo` is invoked
 internally only for the specific apt/dpkg/keyring steps that need it.
+The script checks both of these itself at startup and aborts with an
+error if it's run as root, or if the invoking user has no sudo
+privileges at all.
 
 That user needs sudo privileges for those steps (apt, `dpkg
 --add-architecture`, writing to `/etc/apt`). If you're running this
 unattended (cron, a systemd unit, a non-interactive SSH command) rather
 than from an already-open interactive shell, plain `sudo` will hang
-waiting for a password prompt nothing can answer. Either:
+waiting for a password prompt nothing can answer — including in the
+script's own startup check. Either:
 
 - run it interactively once first so `sudo` caches your credentials for
   the session, or

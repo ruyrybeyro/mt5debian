@@ -13,6 +13,21 @@ cleanup_temp_files() {
 }
 trap cleanup_temp_files EXIT
 
+# This script must run as a normal user, not root: Wine explicitly
+# refuses to run as root, and every path here ($HOME/.mt5,
+# $HOME/.config/tigervnc, etc.) assumes a real user's home directory.
+# It still needs sudo for the apt/dpkg/keyring steps, so check that
+# up front too, rather than failing confusingly partway through.
+if [ "$(id -u)" -eq 0 ]; then
+    echo "ERROR: do not run this script as root or via sudo. Run it as a normal user with sudo privileges instead (see README: User & permissions)." >&2
+    exit 1
+fi
+
+if ! sudo -v; then
+    echo "ERROR: this user does not have sudo privileges, which this script needs for apt/dpkg steps (see README: User & permissions)." >&2
+    exit 1
+fi
+
 usage() {
     cat << 'USAGE'
 Usage: mt5debian.sh [-p|--password password] [-P|--viewonly-password password]
