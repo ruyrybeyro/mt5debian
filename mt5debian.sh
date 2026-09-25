@@ -335,6 +335,13 @@ else
     fi
 fi
 
+WINEPREFIX="$HOME/.mt5"
+export WINEPREFIX
+if [ ! -d "$WINEPREFIX" ]; then
+    echo "Creating 64-bit Wine prefix"
+    WINEARCH=win64 wineboot -u
+fi
+
 echo "Configure minimal xstartup (no window manager, keep X session alive)"
 mkdir -p "$HOME/.config/tigervnc"
 XSTARTUP="$HOME/.config/tigervnc/xstartup"
@@ -501,19 +508,18 @@ start_pymt5linux() {
 
 echo "Initialize Wine prefix"
 wait_for_display
+
+
 # Explicit win64 + wineboot -u rather than leaving prefix creation to
 # whatever the first implicit `wine ...` call below happens to be:
 # MT5 (terminal64.exe) needs a 64-bit prefix, and letting some other
 # command trigger first-run prefix creation implicitly has been observed
 # to leave it incompletely initialized (e.g. missing the 64-bit
 # "Program Files" layout the installers below expect).
-if ! WINEARCH=win64 wineboot -u; then
-    echo "WARNING: wineboot exited with an error, continuing anyway"
-fi
 
-echo "Set environment to Windows 10"
-wait_for_display
-if ! winecfg -v=win10; then
+echo "Set environment to Windows 11"
+
+if ! winecfg -v=win11; then
     echo "WARNING: winecfg exited with an error, continuing anyway"
 fi
 
