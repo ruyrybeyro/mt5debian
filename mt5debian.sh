@@ -224,6 +224,17 @@ echo "OS: $NAME $VERSION_ID"
 export DEBIAN_FRONTEND=noninteractive
 export NEEDRESTART_MODE=a
 
+# A Debian install from DVD/CD media leaves a "deb cdrom:[...]" line in
+# sources.list pointing at that media. With no drive present, apt refuses
+# to update from it (no Release file) and prints a scary-looking but
+# harmless error/notice on every apt update — comment it out rather than
+# leaving that to trip up an unattended run. Idempotent: already-commented
+# lines don't match "^deb cdrom:" on a rerun.
+if [ -f /etc/apt/sources.list ] && grep -q '^deb cdrom:' /etc/apt/sources.list; then
+    echo "Disabling stale cdrom: apt source (no DVD/CD-ROM drive present)"
+    sudo sed -i 's|^deb cdrom:|# Disabled by mt5debian.sh (no drive present): deb cdrom:|' /etc/apt/sources.list
+fi
+
 # All apt packages the script needs, checked up front. If every one of
 # these plus wine is already present, the whole apt update / repo setup /
 # install block below is skipped entirely — no needless network calls or
