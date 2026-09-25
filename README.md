@@ -122,10 +122,10 @@ Options:
 -p, --password password             VNC password. Sets it non-interactively,
                                      overwriting any existing one. If
                                      omitted, an existing password is left
-                                     alone; if none exists yet, vncserver
-                                     prompts interactively as usual (and
-                                     asks whether to also set a view-only
-                                     password).
+                                     alone; if none exists yet, you're
+                                     prompted interactively via vncpasswd
+                                     (and asked whether to also set a
+                                     view-only password).
 -P, --viewonly-password password    VNC view-only password. Only used
                                      together with -p/--password.
 -w, --wine-version stable|staging|devel
@@ -226,7 +226,9 @@ plus one for every non-loopback IPv4 and IPv6 address it has (link-local
 `fe80::` addresses are skipped, since they need a zone id that a plain URL
 can't express). Copy one of those printed URLs into a browser on your
 workstation (not on the VM itself) to reach the MT5 desktop over noVNC;
-the VNC password is set on first connection.
+the VNC password is whatever was set during the run (via `-p`, or the
+interactive `vncpasswd` prompt if none existed yet and `-p` wasn't
+given).
 
 ## Logs
 

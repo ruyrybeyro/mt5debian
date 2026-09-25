@@ -38,9 +38,9 @@ Usage: mt5debian.sh [-p|--password password] [-P|--viewonly-password password]
   -p, --password             VNC password. Sets it non-interactively,
                               overwriting any existing one. If omitted,
                               an existing password is left alone; if none
-                              exists yet, vncserver prompts interactively
-                              as usual (and asks whether to also set a
-                              view-only password).
+                              exists yet, you're prompted interactively
+                              via vncpasswd (and asked whether to also set
+                              a view-only password).
   -P, --viewonly-password    VNC view-only password. Only used together
                               with -p/--password.
   -w, --wine-version         Force the Wine channel (stable, staging, or
@@ -358,6 +358,16 @@ if [ -n "$VNC_PASSWORD" ]; then
     else
         printf '%s\n%s\nn\n' "$VNC_PASSWORD" "$VNC_PASSWORD" | vncpasswd "$VNC_PASSWD_FILE"
     fi
+elif [ ! -f "$VNC_PASSWD_FILE" ]; then
+    # vncserver is given -PasswordFile explicitly below (see comment
+    # there), which bypasses its own auto-prompt-to-create logic — that
+    # logic only triggers for its auto-discovered default path, not one
+    # passed explicitly. Without this, a first run with no -p/--password
+    # would hand vncserver a password file that doesn't exist yet, and
+    # -SecurityTypes VncAuth would then fail (or worse, run without real
+    # auth) instead of prompting like the old default behavior did.
+    echo "No existing VNC password found, prompting to set one"
+    vncpasswd "$VNC_PASSWD_FILE"
 fi
 
 echo "Start Xvnc on display :$VNC_DISPLAY (no window manager)"
@@ -501,8 +511,9 @@ if ! WINEARCH=win64 wineboot -u; then
     echo "WARNING: wineboot exited with an error, continuing anyway"
 fi
 
-echo "Set environment to Windows 11"
-if ! winecfg -v=win11; then
+echo "Set environment to Windows 10"
+wait_for_display
+if ! winecfg -v=win10; then
     echo "WARNING: winecfg exited with an error, continuing anyway"
 fi
 
