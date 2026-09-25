@@ -325,7 +325,7 @@ else
 
         echo "$PRETTY_NAME found ($VERSION_CODENAME)"
         case "$VERSION_CODENAME" in
-            trixie | bookworm)
+            trixie | bookworm | resolute)
                 ;;
             *)
                 echo "WARNING: OS release not tested with this script: $PRETTY_NAME — attempting anyway"

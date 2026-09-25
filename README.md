@@ -1,15 +1,15 @@
 # mt5debian.sh
 
 [![Bash](https://img.shields.io/badge/bash-4%2B-blue.svg)](https://www.gnu.org/software/bash/)
-[![Platform](https://img.shields.io/badge/platform-Debian%2012%2F13-red.svg)](https://www.debian.org/)
+[![Platform](https://img.shields.io/badge/platform-Debian%20%2F%20Ubuntu-red.svg)](https://www.debian.org/)
 [![Wine](https://img.shields.io/badge/wine-staging-orange.svg)](https://www.winehq.org/)
 [![MetaTrader](https://img.shields.io/badge/MetaTrader-5-blue.svg)](https://www.metatrader5.com/)
 [![Bridge](https://img.shields.io/badge/bridge-pymt5linux%20%2F%20RPyC-orange.svg)](https://pypi.org/project/pymt5linux/)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-> Headless MetaTrader 5 on Debian via Wine, reachable over noVNC, with a Python bridge to drive it.
+> Headless MetaTrader 5 on Debian or Ubuntu via Wine, reachable over noVNC, with a Python bridge to drive it.
 
-`mt5debian.sh` sets up MetaTrader 5 on a headless Debian VM via Wine, with
+`mt5debian.sh` sets up MetaTrader 5 on a headless Debian or Ubuntu VM via Wine, with
 VNC/noVNC access and an optional RPyC bridge (via `pymt5linux`) so
 external Python code can drive the running terminal.
 
@@ -57,11 +57,10 @@ using Windows Python. The current `mt5linux` package uses a different
 
 ## Requirements
 
-- Debian 12 (bookworm) or 13 (trixie) — 13 tested. Ubuntu is also accepted
-  (WineHQ publishes a matching repo layout for it) but not yet validated
-  end-to-end. Other releases of either are attempted with a warning
-  rather than refused outright; any distro other than Debian or Ubuntu is
-  refused outright.
+- Debian 12 (bookworm) or 13 (trixie) — 13 tested — or Ubuntu 26.04 LTS
+  (resolute) — tested. Other releases of either are attempted with a
+  warning rather than refused outright; any distro other than Debian or
+  Ubuntu is refused outright.
 - `sudo` access (apt, dpkg, and architecture changes require it).
 - Outbound internet access to `dl.winehq.org`, `download.mql5.com`,
   `go.microsoft.com`, and `python.org`.
