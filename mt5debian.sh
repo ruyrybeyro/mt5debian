@@ -344,7 +344,7 @@ WINEPREFIX="$HOME/.mt5"
 export WINEPREFIX
 if [ ! -d "$WINEPREFIX" ]; then
     echo "Creating 64-bit Wine prefix"
-    WINEARCH=win64 wineboot -u
+    WINEARCH=win64 wineboot --init
 fi
 
 echo "Configure minimal xstartup (no window manager, keep X session alive)"
