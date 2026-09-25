@@ -57,10 +57,11 @@ using Windows Python. The current `mt5linux` package uses a different
 
 ## Requirements
 
-- Debian 12 (bookworm) or 13 (trixie) — 13 tested. Other Debian releases
-  are attempted
-  with a warning rather than refused outright, but are untested; any
-  distro other than Debian is refused outright.
+- Debian 12 (bookworm) or 13 (trixie) — 13 tested. Ubuntu is also accepted
+  (WineHQ publishes a matching repo layout for it) but not yet validated
+  end-to-end. Other releases of either are attempted with a warning
+  rather than refused outright; any distro other than Debian or Ubuntu is
+  refused outright.
 - `sudo` access (apt, dpkg, and architecture changes require it).
 - Outbound internet access to `dl.winehq.org`, `download.mql5.com`,
   `go.microsoft.com`, and `python.org`.

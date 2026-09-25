@@ -2,6 +2,8 @@
 # Copyright 2026, Rui Ribeiro
 # Written with the assistance of Claude
 
+#PATH=$PATH:~/.local/bin
+
 set -Eeuo pipefail
 
 # Cleans up downloaded installer files on any exit — success, an early
@@ -278,8 +280,11 @@ else
         echo "Missing package: winehq-$WINE_VERSION"
         echo "Choose Wine repo"
 
-        if [ "$ID" != "debian" ]; then
-            echo "ERROR: unsupported distro: $PRETTY_NAME (this script targets Debian only)"
+        # $ID doubles as the path component WineHQ's own repo layout uses
+        # below (dl.winehq.org/wine-builds/debian/... vs .../ubuntu/...),
+        # since /etc/os-release's ID is literally "debian" or "ubuntu".
+        if [ "$ID" != "debian" ] && [ "$ID" != "ubuntu" ]; then
+            echo "ERROR: unsupported distro: $PRETTY_NAME (this script targets Debian and Ubuntu only)"
             exit 1
         fi
 
@@ -318,16 +323,16 @@ else
             exit 1
         fi
 
-        echo "Debian Linux found: $NAME $VERSION_ID ($VERSION_CODENAME)"
+        echo "$PRETTY_NAME found ($VERSION_CODENAME)"
         case "$VERSION_CODENAME" in
             trixie | bookworm)
                 ;;
             *)
-                echo "WARNING: Debian release not tested with this script: $PRETTY_NAME — attempting anyway"
+                echo "WARNING: OS release not tested with this script: $PRETTY_NAME — attempting anyway"
                 ;;
         esac
         sudo wget -NP /etc/apt/sources.list.d/ \
-            "https://dl.winehq.org/wine-builds/debian/dists/$VERSION_CODENAME/winehq-$VERSION_CODENAME.sources"
+            "https://dl.winehq.org/wine-builds/$ID/dists/$VERSION_CODENAME/winehq-$VERSION_CODENAME.sources"
 
         echo "Install Wine and Wine Mono"
         sudo apt update
