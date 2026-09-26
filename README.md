@@ -39,6 +39,7 @@ Key features:
 - [Logs](#logs)
 - [Troubleshooting](#troubleshooting)
 - [Limitations](#limitations)
+- [Security notes](SECURITY.md)
 - [License](#license)
 
 ## What it does
@@ -247,14 +248,9 @@ by port, so they won't collide between copies even though `/tmp` itself is
 shared machine-wide.
 
 That's process/filesystem separation by convention (distinct OS users),
-not a hard security boundary — `/proc` is visible across users on a
-default Debian install (`hidepid=0`), so e.g. `pgrep`-based "is MT5
-already running" checks can in principle see another user's process, not
-just your own. Fine for cooperating/trusted users on the same box. If you
-ever need to run this for **mutually untrusted** users, revisit that:
-either mount `/proc` with `hidepid=2`, or move to real isolation
-(a Linux namespace/container per user, or `systemd-nspawn`) rather than
-relying on OS-user separation alone. Not implemented here yet.
+not a hard security boundary — see [SECURITY.md](SECURITY.md) for what
+that means in practice and what to do if you need real isolation between
+**mutually untrusted** users.
 
 ## Accessing MT5
 
