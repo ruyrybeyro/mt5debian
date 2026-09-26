@@ -202,6 +202,11 @@ Options:
                                      continue as a clean reinstall. Does not
                                      touch the VNC password or apt/Wine
                                      package installation.
+--check                              Report the status of everything this
+                                     script manages (Wine, prefix, MT5,
+                                     WebView2, VNC/noVNC, the bridge, ...)
+                                     and exit — makes no changes. Mutually
+                                     exclusive with --purge.
 -h, --help                          Show help and exit.
 ```
 
@@ -318,6 +323,19 @@ Filenames are further suffixed by `VNC_PORT`, so each copy of the script
   once the bridge port is confirmed open; kept if it fails to come up)
 
 ## Troubleshooting
+
+To see the status of everything this script manages without changing
+anything:
+
+```bash
+./mt5debian.sh --check
+```
+
+Prints one line per component — Wine, the prefix, its configured Windows
+version, MT5, WebView2, VNC/noVNC, the running MT5 process, Python-in-Wine
+and its packages, the Linux-side venv, and the bridge port — each as
+OK/installed or MISSING/DOWN/not installed, useful for spotting which
+step to focus on when something isn't working.
 
 For a clean reinstall of Wine/MT5/WebView2/Python-in-Wine:
 

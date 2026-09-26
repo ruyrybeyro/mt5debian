@@ -63,7 +63,7 @@ Usage: mt5debian.sh [-p|--password password] [-P|--viewonly-password password]
                     [-w|--wine-version stable|staging|devel] [--stock-wine]
                     [-n|--novnc-port port] [-b|--bridge-port port]
                     [-v|--vnc-port port]
-                    [--purge] [-h|--help]
+                    [--purge] [--check] [-h|--help]
   -p, --password             VNC password. Sets it non-interactively,
                               overwriting any existing one. If omitted,
                               an existing password is left alone; if none
@@ -94,11 +94,16 @@ Usage: mt5debian.sh [-p|--password password] [-P|--viewonly-password password]
                               continue as a clean reinstall. Does not
                               touch the VNC password or apt/Wine package
                               installation.
+  --check                    Report the status of everything this
+                              script manages (Wine, prefix, MT5,
+                              WebView2, VNC/noVNC, the bridge, ...) and
+                              exit — makes no changes. Mutually
+                              exclusive with --purge.
   -h, --help                 Show this help and exit.
 USAGE
 }
 
-PARSED_OPTS=$(getopt --options p:P:w:n:b:v:h --longoptions password:,viewonly-password:,wine-version:,stock-wine,novnc-port:,bridge-port:,vnc-port:,purge,help --name "mt5debian.sh" -- "$@") \
+PARSED_OPTS=$(getopt --options p:P:w:n:b:v:h --longoptions password:,viewonly-password:,wine-version:,stock-wine,novnc-port:,bridge-port:,vnc-port:,purge,check,help --name "mt5debian.sh" -- "$@") \
     || { usage; exit 1; }
 eval set -- "$PARSED_OPTS"
 
@@ -110,6 +115,7 @@ NOVNC_PORT_OVERRIDE=""
 MT5SERVER_PORT_OVERRIDE=""
 VNC_PORT_OVERRIDE=""
 PURGE=""
+CHECK=""
 while true; do
     case "$1" in
         -p|--password) VNC_PASSWORD="$2"; shift 2 ;;
@@ -120,11 +126,17 @@ while true; do
         -b|--bridge-port) MT5SERVER_PORT_OVERRIDE="$2"; shift 2 ;;
         -v|--vnc-port) VNC_PORT_OVERRIDE="$2"; shift 2 ;;
         --purge) PURGE=1; shift ;;
+        --check) CHECK=1; shift ;;
         -h|--help) usage; exit 0 ;;
         --) shift; break ;;
         *) usage; exit 1 ;;
     esac
 done
+
+if [ -n "$CHECK" ] && [ -n "$PURGE" ]; then
+    echo "ERROR: --check and --purge are mutually exclusive"
+    exit 1
+fi
 
 case "$WINE_VERSION_OVERRIDE" in
     ""|stable|staging|devel) ;;
@@ -225,6 +237,108 @@ stop_by_pidfile() {
     fi
     rm -f "$pidfile"
 }
+
+# Deliberately self-contained — doesn't call any of the helpers defined
+# further down in the script (is_port_listening, webview2_installed,
+# is_wine_python_package_installed, ...), since --check needs to work
+# even when this run's own control flow never reaches those definitions
+# (it exits right after this). A little duplication here is cheaper
+# than restructuring the rest of the script's layout around it.
+run_check() {
+    local wv2dir="$WINEPREFIX/drive_c/Program Files (x86)/Microsoft/EdgeWebView/Application"
+    local mt5exe="$WINEPREFIX/drive_c/Program Files/MetaTrader 5/terminal64.exe"
+    local venv_dir="$HOME/.mt5debian-venv"
+
+    row() { printf '%-19s %s\n' "$1" "$2"; }
+
+    if command -v wine >/dev/null 2>&1; then
+        row "Wine:" "OK ($(wine --version 2>/dev/null))"
+    else
+        row "Wine:" "NOT INSTALLED"
+    fi
+
+    if [ -d "$WINEPREFIX" ]; then
+        row "Wine prefix:" "OK ($WINEPREFIX)"
+    else
+        row "Wine prefix:" "MISSING ($WINEPREFIX)"
+    fi
+
+    if [ -d "$WINEPREFIX" ] && command -v wine >/dev/null 2>&1; then
+        local winver
+        winver="$(wine cmd /c ver 2>/dev/null | tr -d '\r' | grep -o '\[Version[^]]*\]')"
+        row "Windows version:" "${winver:-unknown (prefix not booted yet?)}"
+    else
+        row "Windows version:" "n/a"
+    fi
+
+    if [ -f "$mt5exe" ]; then
+        row "MT5 executable:" "OK"
+    else
+        row "MT5 executable:" "MISSING"
+    fi
+
+    if [ -d "$wv2dir" ] && [ -n "$(find "$wv2dir" -mindepth 1 -maxdepth 1 -type d -print -quit 2>/dev/null)" ]; then
+        row "WebView2:" "OK"
+    else
+        row "WebView2:" "MISSING"
+    fi
+
+    if command -v ss >/dev/null 2>&1 && ss -ltn "( sport = :$VNC_PORT )" 2>/dev/null | tail -n +2 | grep -q .; then
+        row "VNC:" "OK (:$VNC_DISPLAY / $VNC_PORT)"
+    else
+        row "VNC:" "DOWN (:$VNC_DISPLAY / $VNC_PORT)"
+    fi
+
+    if command -v ss >/dev/null 2>&1 && ss -ltn "( sport = :$NOVNC_PORT )" 2>/dev/null | tail -n +2 | grep -q .; then
+        row "noVNC:" "OK ($NOVNC_PORT)"
+    else
+        row "noVNC:" "DOWN ($NOVNC_PORT)"
+    fi
+
+    if pgrep -u "$UID" -f '[/\\]terminal64\.exe([[:space:]]|$)' >/dev/null 2>&1; then
+        row "MT5 process:" "OK"
+    else
+        row "MT5 process:" "NOT RUNNING"
+    fi
+
+    if command -v wine >/dev/null 2>&1 && wine python --version >/dev/null 2>&1; then
+        row "Python/Wine:" "$(wine python --version 2>/dev/null | tr -d '\r')"
+    else
+        row "Python/Wine:" "NOT INSTALLED"
+    fi
+
+    if command -v wine >/dev/null 2>&1 && wine python -c \
+        "import importlib.metadata; importlib.metadata.version('MetaTrader5')" >/dev/null 2>&1; then
+        row "MetaTrader5:" "installed"
+    else
+        row "MetaTrader5:" "not installed"
+    fi
+
+    if command -v wine >/dev/null 2>&1 && wine python -c \
+        "import importlib.metadata; importlib.metadata.version('pymt5linux')" >/dev/null 2>&1; then
+        row "pymt5linux (Wine):" "installed"
+    else
+        row "pymt5linux (Wine):" "not installed"
+    fi
+
+    if [ -x "$venv_dir/bin/python" ] && "$venv_dir/bin/python" -c \
+        "import importlib.metadata; importlib.metadata.version('pymt5linux')" >/dev/null 2>&1; then
+        row "pymt5linux (venv):" "installed ($venv_dir)"
+    else
+        row "pymt5linux (venv):" "not installed"
+    fi
+
+    if timeout 2 bash -c "</dev/tcp/$MT5SERVER_HOST/$MT5SERVER_PORT" 2>/dev/null; then
+        row "bridge:" "OK ($MT5SERVER_HOST:$MT5SERVER_PORT)"
+    else
+        row "bridge:" "DOWN ($MT5SERVER_HOST:$MT5SERVER_PORT)"
+    fi
+}
+
+if [ -n "$CHECK" ]; then
+    run_check
+    exit 0
+fi
 
 if [ -n "$PURGE" ]; then
     # Belt-and-braces guard on the rm -rf below: WINEPREFIX is hard-coded
