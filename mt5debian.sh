@@ -120,10 +120,16 @@ if [ -n "$VNC_PORT_OVERRIDE" ] && { ! is_valid_port "$VNC_PORT_OVERRIDE" || [ "$
     exit 1
 fi
 
+# Single source of truth for the Wine prefix path — every other spot in
+# this script that needs it (purge, prefix creation, MT5_EXE/WEBVIEW2_DIR
+# below) reads this instead of repeating the literal path.
+WINEPREFIX="$HOME/.mt5"
+export WINEPREFIX
+
 if [ -n "$PURGE" ]; then
-    echo "Purging existing Wine prefix ($HOME/.mt5)"
-    WINEPREFIX="$HOME/.mt5" wineserver -k 2>/dev/null || true
-    rm -rf "$HOME/.mt5"
+    echo "Purging existing Wine prefix ($WINEPREFIX)"
+    wineserver -k 2>/dev/null || true
+    rm -rf "$WINEPREFIX"
 fi
 
 # MetaTrader, WebView2, and Python-in-Wine download urls
@@ -359,8 +365,6 @@ fi
 # rerun, which is what caused prefix corruption ("could not load
 # kernel32.dll") in practice. Guarded on the directory rather than
 # unconditional for the same reason: leave a working prefix alone.
-WINEPREFIX="$HOME/.mt5"
-export WINEPREFIX
 if [ ! -d "$WINEPREFIX" ]; then
     echo "Creating 64-bit Wine prefix"
     # Unset explicitly rather than trusting no DISPLAY is inherited from
@@ -444,8 +448,8 @@ else
     echo "WARNING: novnc web assets not found at $NOVNC_DIR, adjust path"
 fi
 
-MT5_EXE="$HOME/.mt5/drive_c/Program Files/MetaTrader 5/terminal64.exe"
-WEBVIEW2_DIR="$HOME/.mt5/drive_c/Program Files (x86)/Microsoft/EdgeWebView/Application"
+MT5_EXE="$WINEPREFIX/drive_c/Program Files/MetaTrader 5/terminal64.exe"
+WEBVIEW2_DIR="$WINEPREFIX/drive_c/Program Files (x86)/Microsoft/EdgeWebView/Application"
 
 echo "Download MetaTrader and WebView2 Runtime"
 if [ ! -f "$MT5_EXE" ]; then
