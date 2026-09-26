@@ -487,6 +487,10 @@ else
 fi
 
 echo "Configure minimal xstartup (no window manager, keep X session alive)"
+# Unconditionally overwritten on every run, unlike most other files this
+# script touches (which check for an existing one first) — this script
+# owns ~/.config/tigervnc/xstartup outright. Don't hand-edit it; any
+# customization would be silently clobbered on the next run.
 mkdir -p "$HOME/.config/tigervnc"
 XSTARTUP="$HOME/.config/tigervnc/xstartup"
 cat > "$XSTARTUP" << 'EOF'

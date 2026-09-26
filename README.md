@@ -101,6 +101,10 @@ script's comments for exactly which filenames). It does not otherwise
 touch your existing apt sources, other than commenting out a stale `deb
 cdrom:` line if a DVD/CD install left one behind.
 
+It also owns `~/.config/tigervnc/xstartup` outright, overwriting it on
+every run rather than leaving an existing one alone — don't hand-edit
+it, since any customization would be silently clobbered on the next run.
+
 That user needs sudo privileges for those steps (apt, `dpkg
 --add-architecture`, writing to `/etc/apt`). If you're running this
 unattended (cron, a systemd unit, a non-interactive SSH command) rather
