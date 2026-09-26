@@ -362,6 +362,12 @@ WINEPREFIX="$HOME/.mt5"
 export WINEPREFIX
 if [ ! -d "$WINEPREFIX" ]; then
     echo "Creating 64-bit Wine prefix"
+    # Unset explicitly rather than trusting no DISPLAY is inherited from
+    # the invoking shell (an SSH -X session, a desktop terminal, etc.) —
+    # this guarantees the headless/null-driver fallback the comment above
+    # is relying on, instead of possibly trying to reach some unrelated
+    # display.
+    unset DISPLAY
     WINEARCH=win64 wineboot --init
 else
     echo "Wine prefix already exists, leaving it as-is"
