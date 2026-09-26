@@ -170,7 +170,8 @@ MT5_TERMINAL_LOG="/tmp/mt5-terminal-$VNC_PORT.log"
 . /etc/os-release
 
 # Wine channel to install: stable, staging, or devel. staging confirmed
-# working on Debian. Force a different channel with -w/--wine-version.
+# working on Debian and Ubuntu. Force a different channel with
+# -w/--wine-version.
 if [ -n "$WINE_VERSION_OVERRIDE" ]; then
     WINE_VERSION="$WINE_VERSION_OVERRIDE"
 else
