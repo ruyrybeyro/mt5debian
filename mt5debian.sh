@@ -761,7 +761,8 @@ if [ ! -f "$MT5_EXE" ]; then
     # install succeeded. Check whether $MT5_EXE actually exists instead.
     wine "$RUNTIME_DIR/mt5setup.exe" /auto || true
     if [ ! -f "$MT5_EXE" ]; then
-        echo "WARNING: MetaTrader 5 install did not produce $MT5_EXE, continuing anyway"
+        echo "ERROR: MetaTrader 5 installation failed — did not produce $MT5_EXE"
+        exit 1
     fi
 else
     echo "Already installed: MetaTrader 5"
