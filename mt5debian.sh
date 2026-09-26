@@ -520,6 +520,11 @@ elif [ ! -f "$VNC_PASSWD_FILE" ]; then
     echo "No existing VNC password found, prompting to set one"
     vncpasswd "$VNC_PASSWD_FILE"
 fi
+# TigerVNC's own vncpasswd already writes this mode 0600, but that's an
+# assumption worth asserting explicitly rather than trusting silently —
+# also self-heals a pre-existing file (e.g. from an older TigerVNC
+# build, or copied in some other way) that isn't already restricted.
+chmod 600 "$VNC_PASSWD_FILE"
 
 # Checking that the three configured ports are distinct (done earlier)
 # isn't the same as checking they're actually free: something else on
