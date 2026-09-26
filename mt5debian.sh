@@ -351,11 +351,20 @@ else
     fi
 fi
 
+# Created once here, before Xvnc/DISPLAY even exist — wineboot --init
+# doesn't need a display to build the prefix's directory/registry
+# structure, and running it fully headless (falling back to Wine's null
+# driver) avoids ever re-touching an already-initialized prefix on a
+# rerun, which is what caused prefix corruption ("could not load
+# kernel32.dll") in practice. Guarded on the directory rather than
+# unconditional for the same reason: leave a working prefix alone.
 WINEPREFIX="$HOME/.mt5"
 export WINEPREFIX
 if [ ! -d "$WINEPREFIX" ]; then
     echo "Creating 64-bit Wine prefix"
     WINEARCH=win64 wineboot --init
+else
+    echo "Wine prefix already exists, leaving it as-is"
 fi
 
 echo "Configure minimal xstartup (no window manager, keep X session alive)"
@@ -404,7 +413,6 @@ echo "Start Xvnc on display :$VNC_DISPLAY (no window manager)"
 vncserver -kill ":$VNC_DISPLAY" 2>/dev/null || true
 vncserver ":$VNC_DISPLAY" -geometry 1280x800 -depth 24 -localhost no -xstartup "$XSTARTUP" -PasswordFile "$VNC_PASSWD_FILE" -SecurityTypes VncAuth
 export DISPLAY=":$VNC_DISPLAY"
-export WINEPREFIX="$HOME/.mt5"
 
 echo "Start noVNC on port $NOVNC_PORT"
 NOVNC_DIR="/usr/share/novnc"
@@ -522,19 +530,8 @@ start_pymt5linux() {
     return 1
 }
 
-echo "Initialize Wine prefix"
-wait_for_display
-
-
-# Explicit win64 + wineboot -u rather than leaving prefix creation to
-# whatever the first implicit `wine ...` call below happens to be:
-# MT5 (terminal64.exe) needs a 64-bit prefix, and letting some other
-# command trigger first-run prefix creation implicitly has been observed
-# to leave it incompletely initialized (e.g. missing the 64-bit
-# "Program Files" layout the installers below expect).
-
 echo "Set environment to Windows 11"
-
+wait_for_display
 if ! winecfg -v=win11; then
     echo "WARNING: winecfg exited with an error, continuing anyway"
 fi
