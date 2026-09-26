@@ -749,8 +749,11 @@ if wine python --version >/dev/null 2>&1; then
     # pkill -f here rather than a PID file: this process runs under
     # `wine`, and Wine can detach the actual server from the launcher
     # PID `$!` would capture, so a PID file isn't reliable for it.
+    # -u "$UID": without it, this would match (and kill) any user's
+    # process with this command line, not just this one's — same
+    # reasoning as the pgrep -u "$UID" fixes elsewhere in this script.
     # Fails (nonzero) when no prior server was running — not an error.
-    pkill -f "pymt5linux --host $MT5SERVER_HOST --port $MT5SERVER_PORT" 2>/dev/null || true
+    pkill -u "$UID" -f "pymt5linux --host $MT5SERVER_HOST --port $MT5SERVER_PORT" 2>/dev/null || true
     sleep 1
     wait_for_display
 
