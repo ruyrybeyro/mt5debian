@@ -316,6 +316,18 @@ else
         echo "Missing package: $WINE_PKG"
 
         if [ -n "$STOCK_WINE" ]; then
+            # WineHQ's and the distro's own wine packages both tend to
+            # register the same wine/wineserver binaries via
+            # update-alternatives — having both installed is more likely
+            # to produce a confusing "which one actually runs" state than
+            # a hard apt conflict, so warn (not block) rather than
+            # silently installing on top of an existing WineHQ install.
+            for other_pkg in winehq-stable winehq-staging winehq-devel; do
+                if is_pkg_installed "$other_pkg"; then
+                    echo "WARNING: $other_pkg is already installed from the WineHQ repo — installing stock wine alongside it may conflict. Consider 'sudo apt remove $other_pkg' first."
+                fi
+            done
+
             echo "Installing Wine from the distro's own repos (no WineHQ repo added)"
             # Same reasoning as the WineHQ path below: even the distro's
             # own "wine" package depends on wine32:i386 for 64-bit apps
@@ -324,6 +336,10 @@ else
             sudo apt update
             sudo apt install --install-recommends -y wine
         else
+            if is_pkg_installed wine; then
+                echo "WARNING: the distro's stock wine package is already installed — installing $WINE_PKG alongside it may conflict. Consider 'sudo apt remove wine' first."
+            fi
+
             echo "Choose Wine repo"
 
             # $ID doubles as the path component WineHQ's own repo layout
