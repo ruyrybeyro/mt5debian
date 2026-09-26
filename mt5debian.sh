@@ -774,7 +774,11 @@ fi
 MT5_HOST="$(hostname -f 2>/dev/null || hostname)"
 echo "noVNC available at http://$MT5_HOST:$NOVNC_PORT/vnc.html (VNC on :$VNC_PORT)"
 
-echo "Also reachable at:"
+# noVNC has only the VNC password for access control (see SECURITY.md) —
+# printing every address it's reachable on is operationally useful, but
+# worth a reminder here that this is exactly what's exposed.
+echo "WARNING: noVNC is reachable on all addresses below with only the VNC password for access control. Do not expose these ports directly to the Internet — see SECURITY.md."
+echo "Also reachable on these network addresses:"
 while read -r ip; do
     echo "  http://$ip:$NOVNC_PORT/vnc.html"
 done < <(ip -o -4 addr show | awk '$2 != "lo" {print $4}' | cut -d/ -f1)
