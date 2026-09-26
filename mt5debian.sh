@@ -193,6 +193,28 @@ fi
 WINEPREFIX="$HOME/.mt5"
 export WINEPREFIX
 
+# RPyC has no built-in auth, so don't bind wider than you need. Defaults to
+# loopback only. If the mt5jail-side client (or anything else) needs to
+# reach this bridge across the network, set this to this VM's specific
+# homelab address (e.g. its vm.srv.bsd DHCP-assigned IP) — not 0.0.0.0 —
+# and firewall the port to the intended source. Defined early (with
+# NOVNC_PID and stop_by_pidfile below) so --purge can stop the bridge
+# and noVNC before touching the prefix.
+MT5SERVER_HOST="127.0.0.1"
+NOVNC_PID="$RUNTIME_DIR/novnc-$VNC_PORT.pid"
+
+# Stops a background process this script previously started, using a PID
+# file rather than `pkill -f <pattern>` — pattern matching against the
+# process list can hit unrelated processes that happen to share the same
+# command-line substring.
+stop_by_pidfile() {
+    local pidfile="$1"
+    if [ -f "$pidfile" ] && kill -0 "$(cat "$pidfile")" 2>/dev/null; then
+        kill "$(cat "$pidfile")" 2>/dev/null || true
+    fi
+    rm -f "$pidfile"
+}
+
 if [ -n "$PURGE" ]; then
     # Belt-and-braces guard on the rm -rf below: WINEPREFIX is hard-coded
     # just above, so this can't fire today, but --purge is destructive
@@ -204,6 +226,20 @@ if [ -n "$PURGE" ]; then
         echo "ERROR: refusing to purge suspicious WINEPREFIX: $WINEPREFIX"
         exit 1
     fi
+
+    # Explicit stop order before wiping the prefix, rather than leaving
+    # the bridge/MT5/noVNC/VNC running against a prefix that's about to
+    # be destroyed out from under them until the rest of the script
+    # naturally gets around to restarting each one anyway: bridge, then
+    # MT5 (both Wine-hosted, so wineserver -k below would eventually take
+    # them down too, but stopping them explicitly first is more certain
+    # and immediate), then noVNC, then the VNC server itself.
+    echo "Stopping bridge, MT5, noVNC, and VNC before purging"
+    pkill -u "$UID" -f "pymt5linux --host $MT5SERVER_HOST --port $MT5SERVER_PORT" 2>/dev/null || true
+    pkill -u "$UID" -f '[/\\]terminal64\.exe([[:space:]]|$)' 2>/dev/null || true
+    stop_by_pidfile "$NOVNC_PID"
+    vncserver -kill ":$VNC_DISPLAY" 2>/dev/null || true
+
     echo "Purging existing Wine prefix ($WINEPREFIX)"
     wineserver -k 2>/dev/null || true
     rm -rf "$WINEPREFIX"
@@ -226,7 +262,7 @@ URL_PYTHON="https://www.python.org/ftp/python/3.13.15/python-3.13.15-amd64.exe"
 # Suffixed by VNC_PORT, not a fixed name: RUNTIME_DIR is already private
 # per OS user, but two copies of this script run by the *same* user with
 # different ports (e.g. for testing) would otherwise still collide on
-# this path. NOVNC_PID/its log and PYMT5LINUX_LOG below use the same
+# this path. NOVNC_PID above and PYMT5LINUX_LOG below use the same
 # VNC_PORT suffix for the same reason.
 MT5_TERMINAL_LOG="$RUNTIME_DIR/mt5-terminal-$VNC_PORT.log"
 
@@ -244,14 +280,8 @@ fi
 # mt5linux bridge — lets external Python code drive the terminal via RPyC.
 # Port matches the FreeBSD mt5jail bridge for consistency by default.
 # Suffixed by VNC_PORT (not MT5SERVER_PORT) for consistency with
-# MT5_TERMINAL_LOG/NOVNC_PID above/below: same reason.
+# MT5_TERMINAL_LOG above / NOVNC_PID near WINEPREFIX: same reason.
 PYMT5LINUX_LOG="$RUNTIME_DIR/pymt5linux-server-$VNC_PORT.log"
-# RPyC has no built-in auth, so don't bind wider than you need. Defaults to
-# loopback only. If the mt5jail-side client (or anything else) needs to
-# reach this bridge across the network, set this to this VM's specific
-# homelab address (e.g. its vm.srv.bsd DHCP-assigned IP) — not 0.0.0.0 —
-# and firewall the port to the intended source.
-MT5SERVER_HOST="127.0.0.1"
 
 # Silences Wine's very chatty fixme:/err: debug spam on stderr.
 export WINEDEBUG=-all
@@ -260,18 +290,6 @@ export WINEDEBUG=-all
 # libosmesa6 is what's actually used). Log-level only, doesn't affect
 # rendering.
 export EGL_LOG_LEVEL=fatal
-
-# Stops a background process this script previously started, using a PID
-# file rather than `pkill -f <pattern>` — pattern matching against the
-# process list can hit unrelated processes that happen to share the same
-# command-line substring.
-stop_by_pidfile() {
-    local pidfile="$1"
-    if [ -f "$pidfile" ] && kill -0 "$(cat "$pidfile")" 2>/dev/null; then
-        kill "$(cat "$pidfile")" 2>/dev/null || true
-    fi
-    rm -f "$pidfile"
-}
 
 echo "OS: $NAME $VERSION_ID"
 
@@ -517,12 +535,9 @@ export DISPLAY=":$VNC_DISPLAY"
 
 echo "Start noVNC on port $NOVNC_PORT"
 NOVNC_DIR="/usr/share/novnc"
-# Suffixed by VNC_PORT (not just a fixed name) — see the RUNTIME_DIR
-# comment at the top of the script for why this lives outside /tmp; the
-# VNC_PORT suffix on top of that is so multiple copies run by the same
-# user (each with their own -v/-n/-b ports) don't clobber each other's
-# pidfile/log.
-NOVNC_PID="$RUNTIME_DIR/novnc-$VNC_PORT.pid"
+# NOVNC_PID is defined early (see near WINEPREFIX above) so --purge can
+# stop noVNC before touching the prefix; NOVNC_LOG only matters once
+# we're actually about to (re)start it, so it's defined here instead.
 NOVNC_LOG="$RUNTIME_DIR/novnc-$VNC_PORT.log"
 stop_by_pidfile "$NOVNC_PID"
 if [ -d "$NOVNC_DIR" ]; then
