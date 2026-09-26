@@ -27,7 +27,8 @@ chmod 700 "$RUNTIME_DIR"
 # scattered after each individual use, which only run if that point in
 # the script is actually reached.
 cleanup_temp_files() {
-    rm -f "$RUNTIME_DIR/winehq.key" "$RUNTIME_DIR/python-installer.exe" "$RUNTIME_DIR/mt5setup.exe" "$RUNTIME_DIR/webview2.exe"
+    rm -f "$RUNTIME_DIR/winehq.key" "$RUNTIME_DIR/python-installer.exe" "$RUNTIME_DIR/mt5setup.exe" "$RUNTIME_DIR/webview2.exe" \
+        "$RUNTIME_DIR/winehq.key.tmp" "$RUNTIME_DIR/python-installer.exe.tmp" "$RUNTIME_DIR/mt5setup.exe.tmp" "$RUNTIME_DIR/webview2.exe.tmp"
 }
 trap cleanup_temp_files EXIT
 
@@ -291,6 +292,19 @@ export WINEDEBUG=-all
 # rendering.
 export EGL_LOG_LEVEL=fatal
 
+# Downloads to a .tmp path first and only renames into place on success,
+# so a killed/interrupted download can never leave a non-empty but
+# truncated file at the final path — [ -s ... ] alone can't tell "fully
+# downloaded" apart from "died halfway through but wrote some bytes".
+download_file() {
+    local url="$1" dest="$2"
+    if ! curl -fsSL "$url" -o "$dest.tmp" || [ ! -s "$dest.tmp" ]; then
+        rm -f "$dest.tmp"
+        return 1
+    fi
+    mv "$dest.tmp" "$dest"
+}
+
 echo "OS: $NAME $VERSION_ID"
 
 # Avoid apt/needrestart blocking on interactive dialogs (service-restart
@@ -438,7 +452,7 @@ else
             # where a failed download and a failed gpg import both just
             # leave no keyring file with no clear reason why.
             echo "Download WineHQ signing key"
-            if ! curl -fsSL https://dl.winehq.org/wine-builds/winehq.key -o "$RUNTIME_DIR/winehq.key" || [ ! -s "$RUNTIME_DIR/winehq.key" ]; then
+            if ! download_file https://dl.winehq.org/wine-builds/winehq.key "$RUNTIME_DIR/winehq.key"; then
                 echo "ERROR: failed to download WineHQ signing key from dl.winehq.org. Aborting."
                 exit 1
             fi
@@ -603,7 +617,7 @@ WEBVIEW2_DIR="$WINEPREFIX/drive_c/Program Files (x86)/Microsoft/EdgeWebView/Appl
 
 echo "Download MetaTrader and WebView2 Runtime"
 if [ ! -f "$MT5_EXE" ]; then
-    if ! curl -fsSL "$URL_MT5" -o "$RUNTIME_DIR/mt5setup.exe" || [ ! -s "$RUNTIME_DIR/mt5setup.exe" ]; then
+    if ! download_file "$URL_MT5" "$RUNTIME_DIR/mt5setup.exe"; then
         echo "ERROR: failed to download mt5setup.exe from $URL_MT5. Aborting."
         exit 1
     fi
@@ -614,7 +628,7 @@ fi
 # MT5's terminal embeds a Chromium view (Market tab, news, signals) via
 # WebView2 — without it those panels fail to render.
 if [ ! -d "$WEBVIEW2_DIR" ]; then
-    if ! curl -fsSL "$URL_WEBVIEW" -o "$RUNTIME_DIR/webview2.exe" || [ ! -s "$RUNTIME_DIR/webview2.exe" ]; then
+    if ! download_file "$URL_WEBVIEW" "$RUNTIME_DIR/webview2.exe"; then
         echo "ERROR: failed to download webview2.exe from $URL_WEBVIEW. Aborting."
         exit 1
     fi
@@ -777,7 +791,7 @@ is_python_package_installed() {
 echo "Install Python in Wine"
 if ! wine python --version >/dev/null 2>&1; then
     wait_for_display
-    if ! curl -fsSL "$URL_PYTHON" -o "$RUNTIME_DIR/python-installer.exe" || [ ! -s "$RUNTIME_DIR/python-installer.exe" ]; then
+    if ! download_file "$URL_PYTHON" "$RUNTIME_DIR/python-installer.exe"; then
         echo "WARNING: failed to download Python-in-Wine installer, skipping pymt5linux bridge setup"
     else
         wine "$RUNTIME_DIR/python-installer.exe" /quiet InstallAllUsers=1 PrependPath=1 \
