@@ -521,6 +521,38 @@ elif [ ! -f "$VNC_PASSWD_FILE" ]; then
     vncpasswd "$VNC_PASSWD_FILE"
 fi
 
+# Checking that the three configured ports are distinct (done earlier)
+# isn't the same as checking they're actually free: something else on
+# the box could already be bound to one. Used below, right after this
+# script's own kill-the-prior-instance step for each service, rather
+# than a naive up-front check — this script is designed to be rerun
+# repeatedly, and every rerun legitimately expects to find its own
+# previous VNC/noVNC/bridge listener already there before killing and
+# replacing it, so checking too early would misreport that as a
+# conflict.
+is_port_listening() {
+    ss -ltn "( sport = :$1 )" 2>/dev/null | tail -n +2 | grep -q .
+}
+
+# Gives the OS a moment to actually release a port after this script
+# just killed whatever it presumed was its own prior instance — a kill
+# signal doesn't guarantee the socket is released instantly. Only an
+# actual conflict (something else now holding the port) should still be
+# listening once this returns.
+wait_for_port_free() {
+    local port="$1" label="$2"
+    local max_wait=10
+    local waited=0
+    while is_port_listening "$port"; do
+        if [ "$waited" -ge "$max_wait" ]; then
+            echo "ERROR: port $port ($label) is still in use by another process after ${max_wait}s. Check what's using it (e.g. 'ss -ltnp | grep :$port') and free it, or choose a different port."
+            return 1
+        fi
+        sleep 1
+        waited=$((waited + 1))
+    done
+}
+
 echo "Start Xvnc on display :$VNC_DISPLAY (no window manager)"
 # -kill legitimately fails (nonzero) when no prior session is running —
 # that's the common case on a fresh box, not an error.
@@ -530,6 +562,7 @@ echo "Start Xvnc on display :$VNC_DISPLAY (no window manager)"
 # versions disagree with each other about the default — passing both
 # explicitly sidesteps all of that.
 vncserver -kill ":$VNC_DISPLAY" 2>/dev/null || true
+wait_for_port_free "$VNC_PORT" "VNC"
 vncserver ":$VNC_DISPLAY" -geometry 1280x800 -depth 24 -localhost no -xstartup "$XSTARTUP" -PasswordFile "$VNC_PASSWD_FILE" -SecurityTypes VncAuth
 export DISPLAY=":$VNC_DISPLAY"
 
@@ -540,6 +573,7 @@ NOVNC_DIR="/usr/share/novnc"
 # we're actually about to (re)start it, so it's defined here instead.
 NOVNC_LOG="$RUNTIME_DIR/novnc-$VNC_PORT.log"
 stop_by_pidfile "$NOVNC_PID"
+wait_for_port_free "$NOVNC_PORT" "noVNC"
 if [ -d "$NOVNC_DIR" ]; then
     # [::] gives dual-stack (v4+v6 on one socket) where IPv6 is available;
     # falls back to IPv4-only rather than failing outright where it isn't.
@@ -783,6 +817,7 @@ if wine python --version >/dev/null 2>&1; then
     # Fails (nonzero) when no prior server was running — not an error.
     pkill -u "$UID" -f "pymt5linux --host $MT5SERVER_HOST --port $MT5SERVER_PORT" 2>/dev/null || true
     sleep 1
+    wait_for_port_free "$MT5SERVER_PORT" "pymt5linux bridge"
     wait_for_display
 
     nohup wine python.exe -m pymt5linux --host "$MT5SERVER_HOST" --port "$MT5SERVER_PORT" python.exe >"$PYMT5LINUX_LOG" 2>&1 &
