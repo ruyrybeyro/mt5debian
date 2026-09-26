@@ -723,9 +723,13 @@ start_pymt5linux() {
 
 echo "Set environment to Windows 11"
 wait_for_display
-if ! winecfg -v=win11; then
-    echo "WARNING: winecfg exited with an error, continuing anyway"
-fi
+# Not cosmetic: MT5/WebView2 depend on the prefix reporting as Windows
+# 11. Silently continuing on failure here would just surface as a much
+# harder to diagnose failure further down instead.
+winecfg -v=win11 || {
+    echo "ERROR: failed to configure Wine prefix for Windows 11"
+    exit 1
+}
 
 echo "Install WebView2 Runtime"
 if [ ! -d "$WEBVIEW2_DIR" ]; then
