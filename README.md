@@ -26,6 +26,21 @@ Key features:
 
 ![MetaTrader 5 running on Debian via noVNC](images/mt5screen.png)
 
+## Table of Contents
+
+- [What it does](#what-it-does)
+- [Why a Python bridge running inside Wine?](#why-a-python-bridge-running-inside-wine)
+- [Requirements](#requirements)
+- [User & permissions](#user--permissions)
+- [Usage](#usage)
+- [Configuration](#configuration)
+- [Running multiple copies](#running-multiple-copies)
+- [Accessing MT5](#accessing-mt5)
+- [Logs](#logs)
+- [Troubleshooting](#troubleshooting)
+- [Limitations](#limitations)
+- [License](#license)
+
 ## What it does
 
 - Installs Wine (staging) from WineHQ's official repo, plus the X11/VNC
@@ -267,3 +282,7 @@ package installation — only what lives inside the Wine prefix.
   Python bridge for MT4. Driving MT4 from Python needs a different
   approach entirely (an EA-based bridge over ZeroMQ/WebSocket, DDE, or a
   third-party API).
+
+## License
+
+MIT — see [LICENSE](LICENSE).
