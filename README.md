@@ -10,17 +10,17 @@
 > Headless MetaTrader 5 on Debian or Ubuntu via Wine, reachable over noVNC, with a Python bridge to drive it.
 
 `mt5debian.sh` sets up MetaTrader 5 on a headless Debian or Ubuntu VM via Wine, with
-VNC/noVNC access and an optional RPyC bridge (via `pymt5linux`) so
+VNC/noVNC access and an included RPyC bridge (via `pymt5linux`) so
 external Python code can drive the running terminal.
 
 Key features:
 
 - One script: installs Wine, VNC/noVNC, WebView2, and MT5 itself
 - Browser-based desktop access over noVNC — no local VNC client needed
-- Optional `pymt5linux` bridge so Linux-side Python can drive the running
+- Included `pymt5linux` bridge so Linux-side Python can drive the running
   terminal over RPyC
-- Idempotent — safe to re-run; already-installed components and
-  downloaded files are skipped, not redone
+- Already-installed components and downloaded files are skipped on a
+  rerun, not redone
 - Configurable noVNC, VNC, and bridge ports for running multiple copies
   on one host
 
@@ -109,7 +109,13 @@ script's own startup check. Either:
 ./mt5debian.sh
 ```
 
-Re-run any time — it picks up from wherever it left off.
+Re-run any time — already-installed components and downloaded files are
+skipped, not redone. This isn't a guarantee that every possible
+interrupted state resumes perfectly: the Wine, WebView2, and MetaTrader 5
+installers can each leave partially-completed state behind if killed
+mid-install, and a rerun won't detect or repair that on its own — if a
+step keeps failing, `--purge` (see [Troubleshooting](#troubleshooting))
+is the reliable fix.
 
 First run takes a while — the WebView2 and MetaTrader 5 installers
 running under Wine are the slow part, not the downloads themselves.
@@ -117,9 +123,13 @@ Wine's own first-time bootstrap (installing Mono into the new prefix)
 also adds to this on the very first `wine` invocation. Subsequent runs
 are fast, since already-installed components are skipped.
 
-If setting this up for multiple users on the same box, it can be worth
-copying an already-bootstrapped `~/.mt5` prefix to the other users
-rather than repeating the slow bootstrap for each one:
+If setting this up for multiple users on the same box, the straightforward
+option is to just run the script again for each user — normal, supported,
+no caveats.
+
+As an optimization for experienced users only, it can be worth copying an
+already-bootstrapped `~/.mt5` prefix to the other users instead of
+repeating the slow bootstrap:
 
 ```bash
 sudo cp -a ~/.mt5 /home/otheruser/.mt5
@@ -128,8 +138,7 @@ sudo chown -R otheruser:otheruser /home/otheruser/.mt5
 
 Note that Wine bakes some absolute paths into the prefix's registry, so
 this isn't guaranteed fully clean — if something misbehaves for the
-copied-to user, falling back to a normal bootstrap for them is the safe
-option.
+copied-to user, falling back to a normal run for them is the safe option.
 
 Options:
 
@@ -258,6 +267,13 @@ workstation (not on the VM itself) to reach the MT5 desktop over noVNC;
 the VNC password is whatever was set during the run (via `-p`, or the
 interactive `vncpasswd` prompt if none existed yet and `-p` wasn't
 given).
+
+noVNC is deliberately reachable on every one of the VM's network
+addresses (unlike the `pymt5linux` bridge, which defaults to loopback
+only — see [`MT5SERVER_HOST`](#mt5server_host)), and the VNC password is
+its only access control. Do not expose port 6080 (or the raw VNC port)
+directly to the Internet — put a firewall, VPN, or reverse proxy in
+front of it if remote access is needed.
 
 ## Logs
 
