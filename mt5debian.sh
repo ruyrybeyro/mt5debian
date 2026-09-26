@@ -627,6 +627,14 @@ fi
 MT5_EXE="$WINEPREFIX/drive_c/Program Files/MetaTrader 5/terminal64.exe"
 WEBVIEW2_DIR="$WINEPREFIX/drive_c/Program Files (x86)/Microsoft/EdgeWebView/Application"
 
+# The "Application" directory existing isn't proof of a usable runtime —
+# the actual binaries live in a version-numbered subdirectory beneath
+# it, so check for at least one of those rather than trusting the
+# parent directory alone.
+webview2_installed() {
+    [ -d "$WEBVIEW2_DIR" ] && [ -n "$(find "$WEBVIEW2_DIR" -mindepth 1 -maxdepth 1 -type d -print -quit)" ]
+}
+
 echo "Download MetaTrader and WebView2 Runtime"
 if [ ! -f "$MT5_EXE" ]; then
     if ! download_file "$URL_MT5" "$RUNTIME_DIR/mt5setup.exe"; then
@@ -639,7 +647,7 @@ fi
 
 # MT5's terminal embeds a Chromium view (Market tab, news, signals) via
 # WebView2 — without it those panels fail to render.
-if [ ! -d "$WEBVIEW2_DIR" ]; then
+if ! webview2_installed; then
     if ! download_file "$URL_WEBVIEW" "$RUNTIME_DIR/webview2.exe"; then
         echo "ERROR: failed to download webview2.exe from $URL_WEBVIEW. Aborting."
         exit 1
@@ -732,14 +740,14 @@ winecfg -v=win11 || {
 }
 
 echo "Install WebView2 Runtime"
-if [ ! -d "$WEBVIEW2_DIR" ]; then
+if ! webview2_installed; then
     wait_for_display
     # Exit code ignored deliberately: WebView2's bootstrapper can return
     # non-zero on a benign condition (e.g. reboot-suggested) even when
     # the install actually succeeded. Check the real outcome below instead.
     wine "$RUNTIME_DIR/webview2.exe" /silent /install || true
-    if [ ! -d "$WEBVIEW2_DIR" ]; then
-        echo "WARNING: WebView2 install did not produce $WEBVIEW2_DIR, continuing anyway"
+    if ! webview2_installed; then
+        echo "WARNING: WebView2 install did not produce a usable runtime under $WEBVIEW2_DIR, continuing anyway"
     fi
 else
     echo "Already installed: WebView2 Runtime"
