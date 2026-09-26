@@ -566,7 +566,8 @@ wait_for_display() {
             vncserver ":$VNC_DISPLAY" -geometry 1280x800 -depth 24 -localhost no -xstartup "$XSTARTUP" -PasswordFile "$VNC_PASSWD_FILE" -SecurityTypes VncAuth || true
             sleep 3
             if ! xdpyinfo >/dev/null 2>&1; then
-                echo "WARNING: display :$VNC_DISPLAY still not responding after restart, proceeding anyway"
+                echo "ERROR: display :$VNC_DISPLAY still not responding after restart"
+                return 1
             fi
             return
         fi
@@ -577,11 +578,14 @@ wait_for_display() {
 # Waits until MetaTrader 5 has actually started before proceeding to the
 # pymt5linux bridge, which needs a running terminal to attach to — a fixed
 # sleep can't tell startup-in-progress apart from startup-failed.
+# -u "$UID": pgrep -f alone matches process command lines machine-wide,
+# not just this user's — without it, another user's own MT5 (see Running
+# multiple copies) would read as "started" here.
 wait_for_mt5() {
     local timeout=60
     local elapsed=0
 
-    while ! pgrep -f '[/\\]terminal64\.exe([[:space:]]|$)' >/dev/null 2>&1; do
+    while ! pgrep -u "$UID" -f '[/\\]terminal64\.exe([[:space:]]|$)' >/dev/null 2>&1; do
         if (( elapsed >= timeout )); then
             echo "ERROR: MetaTrader 5 did not start within ${timeout}s"
             return 1
@@ -655,7 +659,7 @@ else
 fi
 
 echo "Launch MetaTrader 5"
-if pgrep -f '[/\\]terminal64\.exe([[:space:]]|$)' >/dev/null 2>&1; then
+if pgrep -u "$UID" -f '[/\\]terminal64\.exe([[:space:]]|$)' >/dev/null 2>&1; then
     echo "MetaTrader 5 already running, not launching another copy"
 else
     wait_for_display
