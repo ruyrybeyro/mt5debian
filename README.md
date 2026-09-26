@@ -72,7 +72,7 @@ using Windows Python. The current `mt5linux` package uses a different
 
 ## Requirements
 
-- Debian 12 (bookworm) or 13 (trixie) — 13 tested — or Ubuntu 26.04 LTS
+- Debian 12 (bookworm) or 13 (trixie) — 13 tested — and Ubuntu 26.04 LTS
   (resolute) — tested. Other releases of either are attempted with a
   warning rather than refused outright; any distro other than Debian or
   Ubuntu is refused outright.
