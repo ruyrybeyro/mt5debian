@@ -146,7 +146,12 @@ Options:
 -w, --wine-version stable|staging|devel
                                      Force the Wine channel, overriding the
                                      default (staging — see Configuration
-                                     below).
+                                     below). Mutually exclusive with
+                                     --stock-wine.
+--stock-wine                        Install the distro's own "wine"
+                                     package instead of adding the WineHQ
+                                     apt repo. Mutually exclusive with
+                                     -w/--wine-version.
 -n, --novnc-port port               noVNC web port, overriding the default
                                      (6080 — see Configuration below).
 -b, --bridge-port port              pymt5linux bridge port, overriding the
@@ -179,11 +184,20 @@ variable at the top of the script.
 
 ### `WINE_VERSION`
 
-`staging` is confirmed working on Debian. Force a different channel with
-`-w`/`--wine-version` if you need to:
+`staging` is confirmed working on Debian and Ubuntu. Force a different
+channel with `-w`/`--wine-version` if you need to:
 
 ```bash
 ./mt5debian.sh --purge -w stable
+```
+
+Or skip the WineHQ repo entirely and use the distro's own `wine` package
+with `--stock-wine` (mutually exclusive with `-w`/`--wine-version`, since
+there's no channel to pick — the distro ships whatever single version its
+own repos carry):
+
+```bash
+./mt5debian.sh --purge --stock-wine
 ```
 
 ### `NOVNC_PORT`, `VNC_PORT`, and `MT5SERVER_PORT`

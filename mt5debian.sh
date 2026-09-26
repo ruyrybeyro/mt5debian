@@ -33,7 +33,7 @@ fi
 usage() {
     cat << 'USAGE'
 Usage: mt5debian.sh [-p|--password password] [-P|--viewonly-password password]
-                    [-w|--wine-version stable|staging|devel]
+                    [-w|--wine-version stable|staging|devel] [--stock-wine]
                     [-n|--novnc-port port] [-b|--bridge-port port]
                     [-v|--vnc-port port]
                     [--purge] [-h|--help]
@@ -47,6 +47,10 @@ Usage: mt5debian.sh [-p|--password password] [-P|--viewonly-password password]
                               with -p/--password.
   -w, --wine-version         Force the Wine channel (stable, staging, or
                               devel), overriding the default (staging).
+                              Mutually exclusive with --stock-wine.
+  --stock-wine               Install the distro's own "wine" package
+                              instead of adding the WineHQ apt repo.
+                              Mutually exclusive with -w/--wine-version.
   -n, --novnc-port           noVNC web port, overriding the default
                               (6080).
   -b, --bridge-port          pymt5linux bridge port, overriding the
@@ -67,13 +71,14 @@ Usage: mt5debian.sh [-p|--password password] [-P|--viewonly-password password]
 USAGE
 }
 
-PARSED_OPTS=$(getopt --options p:P:w:n:b:v:h --longoptions password:,viewonly-password:,wine-version:,novnc-port:,bridge-port:,vnc-port:,purge,help --name "mt5debian.sh" -- "$@") \
+PARSED_OPTS=$(getopt --options p:P:w:n:b:v:h --longoptions password:,viewonly-password:,wine-version:,stock-wine,novnc-port:,bridge-port:,vnc-port:,purge,help --name "mt5debian.sh" -- "$@") \
     || { usage; exit 1; }
 eval set -- "$PARSED_OPTS"
 
 VNC_PASSWORD=""
 VNC_VIEWONLY_PASSWORD=""
 WINE_VERSION_OVERRIDE=""
+STOCK_WINE=""
 NOVNC_PORT_OVERRIDE=""
 MT5SERVER_PORT_OVERRIDE=""
 VNC_PORT_OVERRIDE=""
@@ -83,6 +88,7 @@ while true; do
         -p|--password) VNC_PASSWORD="$2"; shift 2 ;;
         -P|--viewonly-password) VNC_VIEWONLY_PASSWORD="$2"; shift 2 ;;
         -w|--wine-version) WINE_VERSION_OVERRIDE="$2"; shift 2 ;;
+        --stock-wine) STOCK_WINE=1; shift ;;
         -n|--novnc-port) NOVNC_PORT_OVERRIDE="$2"; shift 2 ;;
         -b|--bridge-port) MT5SERVER_PORT_OVERRIDE="$2"; shift 2 ;;
         -v|--vnc-port) VNC_PORT_OVERRIDE="$2"; shift 2 ;;
@@ -100,6 +106,11 @@ case "$WINE_VERSION_OVERRIDE" in
         exit 1
         ;;
 esac
+
+if [ -n "$STOCK_WINE" ] && [ -n "$WINE_VERSION_OVERRIDE" ]; then
+    echo "ERROR: -w/--wine-version and --stock-wine are mutually exclusive"
+    exit 1
+fi
 
 is_valid_port() {
     [[ "$1" =~ ^[0-9]+$ ]] && [ "$1" -ge 1 ] && [ "$1" -le 65535 ]
@@ -278,10 +289,17 @@ APT_MISSING=()
 for pkg in "${APT_PKGS[@]}"; do
     is_pkg_installed "$pkg" || APT_MISSING+=("$pkg")
 done
+# WINE_PKG is "wine" (distro stock, no WineHQ repo added) with
+# --stock-wine, otherwise the WineHQ channel package as before.
+if [ -n "$STOCK_WINE" ]; then
+    WINE_PKG="wine"
+else
+    WINE_PKG="winehq-$WINE_VERSION"
+fi
 # Initialized empty so `set -u` doesn't trip below when Wine is already
 # installed and the dpkg check on the right of `||` never runs.
 WINE_MISSING=""
-is_pkg_installed "winehq-$WINE_VERSION" || WINE_MISSING=1
+is_pkg_installed "$WINE_PKG" || WINE_MISSING=1
 
 if [ "${#APT_MISSING[@]}" -eq 0 ] && [ -z "$WINE_MISSING" ]; then
     echo "All required packages already installed, skipping apt entirely"
@@ -295,66 +313,78 @@ else
     fi
 
     if [ -n "$WINE_MISSING" ]; then
-        echo "Missing package: winehq-$WINE_VERSION"
-        echo "Choose Wine repo"
+        echo "Missing package: $WINE_PKG"
 
-        # $ID doubles as the path component WineHQ's own repo layout uses
-        # below (dl.winehq.org/wine-builds/debian/... vs .../ubuntu/...),
-        # since /etc/os-release's ID is literally "debian" or "ubuntu".
-        if [ "$ID" != "debian" ] && [ "$ID" != "ubuntu" ]; then
-            echo "ERROR: unsupported distro: $PRETTY_NAME (this script targets Debian and Ubuntu only)"
-            exit 1
+        if [ -n "$STOCK_WINE" ]; then
+            echo "Installing Wine from the distro's own repos (no WineHQ repo added)"
+            # Same reasoning as the WineHQ path below: even the distro's
+            # own "wine" package depends on wine32:i386 for 64-bit apps
+            # like MT5.
+            sudo dpkg --add-architecture i386
+            sudo apt update
+            sudo apt install --install-recommends -y wine
+        else
+            echo "Choose Wine repo"
+
+            # $ID doubles as the path component WineHQ's own repo layout
+            # uses below (dl.winehq.org/wine-builds/debian/... vs
+            # .../ubuntu/...), since /etc/os-release's ID is literally
+            # "debian" or "ubuntu".
+            if [ "$ID" != "debian" ] && [ "$ID" != "ubuntu" ]; then
+                echo "ERROR: unsupported distro: $PRETTY_NAME (this script targets Debian and Ubuntu only)"
+                exit 1
+            fi
+
+            # Exact filenames only — a wildcard here would delete anything
+            # unrelated in that directory that happened to start with
+            # "winehq", not just what this script manages. winehq.list
+            # covers the older pre-deb822 WineHQ setup instructions, in
+            # case that was used here before this script existed.
+            # winehq-$VERSION_CODENAME.sources covers the current distro's
+            # codename dynamically, not just the ones in the case
+            # statement below. The rest are exact fallbacks for a stale
+            # file left over from a prior OS upgrade (e.g. bookworm ->
+            # trixie) on a earlier run of this script.
+            sudo rm -f "/etc/apt/sources.list.d/winehq-$VERSION_CODENAME.sources"
+            sudo rm -f /etc/apt/sources.list.d/winehq-trixie.sources
+            sudo rm -f /etc/apt/sources.list.d/winehq-bookworm.sources
+            sudo rm -f /etc/apt/sources.list.d/winehq.list
+            sudo rm -f /etc/apt/keyrings/winehq-archive.key
+
+            # winehq-staging depends on wine32:i386 even for 64-bit apps like MT5.
+            sudo dpkg --add-architecture i386
+            sudo mkdir -pm755 /etc/apt/keyrings
+
+            # NOTE: download to a plain file first, so curl's own exit code
+            # tells us if the fetch failed, rather than piping into gpg
+            # where a failed download and a failed gpg import both just
+            # leave no keyring file with no clear reason why.
+            echo "Download WineHQ signing key"
+            if ! curl -fsSL https://dl.winehq.org/wine-builds/winehq.key -o /tmp/winehq.key || [ ! -s /tmp/winehq.key ]; then
+                echo "ERROR: failed to download WineHQ signing key from dl.winehq.org. Aborting."
+                exit 1
+            fi
+
+            if ! sudo gpg --batch --yes --dearmor -o /etc/apt/keyrings/winehq-archive.key /tmp/winehq.key || [ ! -s /etc/apt/keyrings/winehq-archive.key ]; then
+                echo "ERROR: failed to import WineHQ signing key into keyring. Aborting."
+                exit 1
+            fi
+
+            echo "$PRETTY_NAME found ($VERSION_CODENAME)"
+            case "$VERSION_CODENAME" in
+                trixie | bookworm | resolute)
+                    ;;
+                *)
+                    echo "WARNING: OS release not tested with this script: $PRETTY_NAME — attempting anyway"
+                    ;;
+            esac
+            sudo wget -NP /etc/apt/sources.list.d/ \
+                "https://dl.winehq.org/wine-builds/$ID/dists/$VERSION_CODENAME/winehq-$VERSION_CODENAME.sources"
+
+            echo "Install Wine and Wine Mono"
+            sudo apt update
+            sudo apt install --install-recommends -y "winehq-$WINE_VERSION"
         fi
-
-        # Exact filenames only — a wildcard here would delete anything
-        # unrelated in that directory that happened to start with
-        # "winehq", not just what this script manages. winehq.list
-        # covers the older pre-deb822 WineHQ setup instructions, in
-        # case that was used here before this script existed.
-        # winehq-$VERSION_CODENAME.sources covers the current distro's
-        # codename dynamically, not just the ones in the case statement
-        # below. The rest are exact fallbacks for a stale file left over
-        # from a prior OS upgrade (e.g. bookworm -> trixie) on a earlier
-        # run of this script.
-        sudo rm -f "/etc/apt/sources.list.d/winehq-$VERSION_CODENAME.sources"
-        sudo rm -f /etc/apt/sources.list.d/winehq-trixie.sources
-        sudo rm -f /etc/apt/sources.list.d/winehq-bookworm.sources
-        sudo rm -f /etc/apt/sources.list.d/winehq.list
-        sudo rm -f /etc/apt/keyrings/winehq-archive.key
-
-        # winehq-staging depends on wine32:i386 even for 64-bit apps like MT5.
-        sudo dpkg --add-architecture i386
-        sudo mkdir -pm755 /etc/apt/keyrings
-
-        # NOTE: download to a plain file first, so curl's own exit code tells
-        # us if the fetch failed, rather than piping into gpg where a failed
-        # download and a failed gpg import both just leave no keyring file
-        # with no clear reason why.
-        echo "Download WineHQ signing key"
-        if ! curl -fsSL https://dl.winehq.org/wine-builds/winehq.key -o /tmp/winehq.key || [ ! -s /tmp/winehq.key ]; then
-            echo "ERROR: failed to download WineHQ signing key from dl.winehq.org. Aborting."
-            exit 1
-        fi
-
-        if ! sudo gpg --batch --yes --dearmor -o /etc/apt/keyrings/winehq-archive.key /tmp/winehq.key || [ ! -s /etc/apt/keyrings/winehq-archive.key ]; then
-            echo "ERROR: failed to import WineHQ signing key into keyring. Aborting."
-            exit 1
-        fi
-
-        echo "$PRETTY_NAME found ($VERSION_CODENAME)"
-        case "$VERSION_CODENAME" in
-            trixie | bookworm | resolute)
-                ;;
-            *)
-                echo "WARNING: OS release not tested with this script: $PRETTY_NAME — attempting anyway"
-                ;;
-        esac
-        sudo wget -NP /etc/apt/sources.list.d/ \
-            "https://dl.winehq.org/wine-builds/$ID/dists/$VERSION_CODENAME/winehq-$VERSION_CODENAME.sources"
-
-        echo "Install Wine and Wine Mono"
-        sudo apt update
-        sudo apt install --install-recommends -y "winehq-$WINE_VERSION"
     fi
 fi
 
