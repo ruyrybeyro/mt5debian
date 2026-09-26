@@ -25,9 +25,15 @@ own set of ports — but that's process/filesystem separation by
 convention, not a hard security boundary.
 
 `/proc` is visible across users on a default Debian or Ubuntu install
-(`hidepid=0`), so e.g. the script's own `pgrep`-based "is MT5 already
-running" checks can in principle see another user's process, not just
-your own.
+(`hidepid=0`), so any user can inspect another's running processes (via
+`ps aux`, or reading `/proc/<pid>/cmdline` directly) — a general
+information-disclosure exposure that isn't something this script can fix
+on its own. The script's own process checks (is MT5 already running,
+stopping a stale `pymt5linux` bridge) are scoped to the current user via
+`pgrep -u "$UID"`/`pkill -u "$UID"`, so they specifically don't get
+confused by another user's same-named process — but that's a correctness
+fix for this script's own logic, not a change to `/proc`'s underlying
+visibility.
 
 This is fine for cooperating/trusted users sharing a box. If you ever need
 to run this for **mutually untrusted** users, revisit that assumption:
