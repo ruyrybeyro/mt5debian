@@ -92,6 +92,15 @@ The script checks both of these itself at startup and aborts with an
 error if it's run as root, or if the invoking user has no sudo
 privileges at all.
 
+Concretely, unless `--stock-wine` is used, this script manages WineHQ's
+own apt repository configuration for you: it writes
+`/etc/apt/sources.list.d/winehq-$VERSION_CODENAME.sources` and an apt
+keyring at `/etc/apt/keyrings/winehq-archive.key`, and removes any
+stale/conflicting WineHQ source files it finds there first (see the
+script's comments for exactly which filenames). It does not otherwise
+touch your existing apt sources, other than commenting out a stale `deb
+cdrom:` line if a DVD/CD install left one behind.
+
 That user needs sudo privileges for those steps (apt, `dpkg
 --add-architecture`, writing to `/etc/apt`). If you're running this
 unattended (cron, a systemd unit, a non-interactive SSH command) rather

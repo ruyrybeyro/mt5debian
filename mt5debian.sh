@@ -203,6 +203,16 @@ if [ -n "$MT5SERVER_PORT_OVERRIDE" ]; then
 else
     MT5SERVER_PORT="8001"
 fi
+
+# Three independent services bound to three configured ports — a
+# collision would mean one silently fails to bind (or worse, two
+# services fighting over the same port), so catch it up front rather
+# than as a confusing runtime failure later.
+if [ "$NOVNC_PORT" = "$VNC_PORT" ] || [ "$NOVNC_PORT" = "$MT5SERVER_PORT" ] || [ "$VNC_PORT" = "$MT5SERVER_PORT" ]; then
+    echo "ERROR: -n/--novnc-port, -v/--vnc-port, and -b/--bridge-port must all be different (got: $NOVNC_PORT, $VNC_PORT, $MT5SERVER_PORT)"
+    exit 1
+fi
+
 # Suffixed by VNC_PORT (not MT5SERVER_PORT) for consistency with
 # MT5_TERMINAL_LOG/NOVNC_PID above/below: same /tmp-is-shared-machine-wide
 # reason.
@@ -317,18 +327,24 @@ else
 
         # The distro's stock wine package and every WineHQ channel all
         # tend to register the same wine/wineserver binaries via
-        # update-alternatives — having more than one installed at once is
-        # more likely to produce a confusing "which one actually runs"
-        # state than a hard apt conflict, so warn (not block) rather than
-        # silently installing on top of whichever one is already there.
-        # Covers both stock-vs-WineHQ and switching between WineHQ
-        # channels (e.g. winehq-stable already installed, now defaulting
-        # to winehq-staging).
+        # update-alternatives — having more than one installed at once
+        # risks a genuinely inconsistent "which one actually runs" state
+        # (not just a hard apt conflict), so refuse rather than silently
+        # installing on top of whichever one is already there. Covers
+        # both stock-vs-WineHQ and switching between WineHQ channels
+        # (e.g. winehq-stable already installed, now defaulting to
+        # winehq-staging). Deliberately not auto-removed: which one to
+        # keep is a call for whoever's running this, not the script.
+        CONFLICTING_WINE_PKGS=()
         for other_pkg in wine winehq-stable winehq-staging winehq-devel; do
             if [ "$other_pkg" != "$WINE_PKG" ] && is_pkg_installed "$other_pkg"; then
-                echo "WARNING: $other_pkg is already installed — installing $WINE_PKG alongside it may conflict. Consider 'sudo apt remove $other_pkg' first."
+                CONFLICTING_WINE_PKGS+=("$other_pkg")
             fi
         done
+        if [ "${#CONFLICTING_WINE_PKGS[@]}" -gt 0 ]; then
+            echo "ERROR: ${CONFLICTING_WINE_PKGS[*]} already installed from a different Wine source than the one requested ($WINE_PKG). Remove the existing package(s) first: sudo apt remove ${CONFLICTING_WINE_PKGS[*]}"
+            exit 1
+        fi
 
         if [ -n "$STOCK_WINE" ]; then
             echo "Installing Wine from the distro's own repos (no WineHQ repo added)"
