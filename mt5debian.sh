@@ -353,7 +353,7 @@ APT_PKGS=(
     libglx-mesa0
     libegl1
     libosmesa6
-    python3-pip
+    python3-venv
 )
 # Bare package names become ambiguous to dpkg once a package is
 # installed under multiple architectures (which wine32:i386 causes for
@@ -813,8 +813,21 @@ is_wine_python_package_installed() {
         >/dev/null 2>&1
 }
 
+# A dedicated venv rather than installing pymt5linux into the system
+# Python: Debian 13+/recent Ubuntu mark the system Python as
+# externally managed (PEP 668), and `pip install --break-system-packages`
+# works but leaves this mixed in with the OS's own Python packages
+# instead of isolated. External Python code driving the bridge needs to
+# run via this venv's interpreter to `import pymt5linux` — see the
+# printed summary at the end of a run.
+VENV_DIR="$HOME/.mt5debian-venv"
+if [ ! -x "$VENV_DIR/bin/python" ]; then
+    echo "Creating Linux-side Python venv at $VENV_DIR"
+    python3 -m venv "$VENV_DIR"
+fi
+
 is_python_package_installed() {
-    python3 -c \
+    "$VENV_DIR/bin/python" -c \
         "import importlib.metadata; importlib.metadata.version('$1')" \
         >/dev/null 2>&1
 }
@@ -855,7 +868,7 @@ if wine python --version >/dev/null 2>&1; then
 
     echo "Install pymt5linux on Linux"
     if ! is_python_package_installed "pymt5linux"; then
-        pip install --break-system-packages --no-cache-dir --progress-bar off pymt5linux \
+        "$VENV_DIR/bin/pip" install --no-cache-dir --progress-bar off pymt5linux \
             || echo "WARNING: pymt5linux (Linux Python) install failed, continuing anyway"
     else
         echo "Already installed: pymt5linux (Linux Python)"
@@ -886,6 +899,11 @@ if wine python --version >/dev/null 2>&1; then
     fi
 else
     echo "WARNING: Wine Python not available, skipping pymt5linux bridge setup"
+fi
+
+if [ -x "$VENV_DIR/bin/python" ]; then
+    echo "pymt5linux (Linux-side) is installed in a dedicated venv, not the system Python: $VENV_DIR"
+    echo "Use \"$VENV_DIR/bin/python\" (or \"source $VENV_DIR/bin/activate\") to import it."
 fi
 
 MT5_HOST="$(hostname -f 2>/dev/null || hostname)"

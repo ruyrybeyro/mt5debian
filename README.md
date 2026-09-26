@@ -71,6 +71,14 @@ keeps the original architecture where the bridge server runs inside Wine
 using Windows Python. The current `mt5linux` package uses a different
 `mt5server.exe`-based architecture — the two are not interchangeable.
 
+The Linux-side `pymt5linux` package (what your own code imports to talk
+to the bridge) is installed into a dedicated venv at
+`~/.mt5debian-venv`, not the system Python — Debian 13+/recent Ubuntu
+mark the system Python as externally managed (PEP 668), and this avoids
+mixing this package into it. Run your own driving code with
+`~/.mt5debian-venv/bin/python`, or `source
+~/.mt5debian-venv/bin/activate` first.
+
 ## Requirements
 
 - Debian 12 (bookworm) or 13 (trixie) — 13 tested — and Ubuntu 26.04 LTS
