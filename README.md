@@ -137,6 +137,12 @@ Wine's own first-time bootstrap (installing Mono into the new prefix)
 also adds to this on the very first `wine` invocation. Subsequent runs
 are fast, since already-installed components are skipped.
 
+If MT5 is already running for this user, the existing instance is
+reused rather than launching a second copy — safe because the Wine
+prefix is fixed to `~/.mt5` for this user throughout, so any running
+`terminal64.exe` owned by this user is, by construction, that same
+instance.
+
 If setting this up for multiple users on the same box, the straightforward
 option is to just run the script again for each user — normal, supported,
 no caveats.

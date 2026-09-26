@@ -769,6 +769,12 @@ else
 fi
 
 echo "Launch MetaTrader 5"
+# This can only match this user's own MT5, not merely "started" but
+# specifically started from $WINEPREFIX — WINEPREFIX is fixed to
+# $HOME/.mt5 for this user throughout the script, so any terminal64.exe
+# process owned by this user is by construction running from that same
+# prefix. If MT5 is already running for this user, the existing
+# instance is reused rather than launching a second copy.
 if pgrep -u "$UID" -f '[/\\]terminal64\.exe([[:space:]]|$)' >/dev/null 2>&1; then
     echo "MetaTrader 5 already running, not launching another copy"
 else
