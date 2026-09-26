@@ -6,12 +6,28 @@
 
 set -Eeuo pipefail
 
+# Private per-user directory for every transient file this script writes
+# (downloaded installers, pid files, logs) — not /tmp: /tmp is
+# world-writable and shared machine-wide, so a predictable /tmp path
+# (e.g. /tmp/novnc-5901.pid, or /tmp/mt5setup.exe before it's handed to
+# `wine`) is a symlink-attack target for any other local user, and
+# stop_by_pidfile()'s `kill "$(cat ...)"` further down reads that file's
+# content back on trust. $XDG_RUNTIME_DIR (when set, e.g. under a logind
+# session) is already private (mode 0700) and per-user; $HOME/.cache is
+# the fallback for a plain SSH session without one — chmod'd explicitly
+# since umask isn't guaranteed restrictive enough on its own. Set up
+# before the root/sudo checks below so it's always defined by the time
+# the EXIT trap could fire, even on the earliest failure path.
+RUNTIME_DIR="${XDG_RUNTIME_DIR:-$HOME/.cache}/mt5debian"
+mkdir -p "$RUNTIME_DIR"
+chmod 700 "$RUNTIME_DIR"
+
 # Cleans up downloaded installer files on any exit — success, an early
 # ERROR/exit 1, or an interrupt — rather than relying on rm -f calls
 # scattered after each individual use, which only run if that point in
 # the script is actually reached.
 cleanup_temp_files() {
-    rm -f /tmp/winehq.key /tmp/python-installer.exe /tmp/mt5setup.exe /tmp/webview2.exe
+    rm -f "$RUNTIME_DIR/winehq.key" "$RUNTIME_DIR/python-installer.exe" "$RUNTIME_DIR/mt5setup.exe" "$RUNTIME_DIR/webview2.exe"
 }
 trap cleanup_temp_files EXIT
 
@@ -178,11 +194,12 @@ else
 fi
 VNC_DISPLAY="$((VNC_PORT - 5900))"
 
-# Suffixed by VNC_PORT, not a fixed name: /tmp is shared machine-wide, so
-# a second copy of this script running under another OS user would
-# otherwise share this path too. NOVNC_PID/its log and PYMT5LINUX_LOG
-# below use the same VNC_PORT suffix for the same reason.
-MT5_TERMINAL_LOG="/tmp/mt5-terminal-$VNC_PORT.log"
+# Suffixed by VNC_PORT, not a fixed name: RUNTIME_DIR is already private
+# per OS user, but two copies of this script run by the *same* user with
+# different ports (e.g. for testing) would otherwise still collide on
+# this path. NOVNC_PID/its log and PYMT5LINUX_LOG below use the same
+# VNC_PORT suffix for the same reason.
+MT5_TERMINAL_LOG="$RUNTIME_DIR/mt5-terminal-$VNC_PORT.log"
 
 . /etc/os-release
 
@@ -214,9 +231,8 @@ if [ "$NOVNC_PORT" = "$VNC_PORT" ] || [ "$NOVNC_PORT" = "$MT5SERVER_PORT" ] || [
 fi
 
 # Suffixed by VNC_PORT (not MT5SERVER_PORT) for consistency with
-# MT5_TERMINAL_LOG/NOVNC_PID above/below: same /tmp-is-shared-machine-wide
-# reason.
-PYMT5LINUX_LOG="/tmp/pymt5linux-server-$VNC_PORT.log"
+# MT5_TERMINAL_LOG/NOVNC_PID above/below: same reason.
+PYMT5LINUX_LOG="$RUNTIME_DIR/pymt5linux-server-$VNC_PORT.log"
 # RPyC has no built-in auth, so don't bind wider than you need. Defaults to
 # loopback only. If the mt5jail-side client (or anything else) needs to
 # reach this bridge across the network, set this to this VM's specific
@@ -391,12 +407,12 @@ else
             # where a failed download and a failed gpg import both just
             # leave no keyring file with no clear reason why.
             echo "Download WineHQ signing key"
-            if ! curl -fsSL https://dl.winehq.org/wine-builds/winehq.key -o /tmp/winehq.key || [ ! -s /tmp/winehq.key ]; then
+            if ! curl -fsSL https://dl.winehq.org/wine-builds/winehq.key -o "$RUNTIME_DIR/winehq.key" || [ ! -s "$RUNTIME_DIR/winehq.key" ]; then
                 echo "ERROR: failed to download WineHQ signing key from dl.winehq.org. Aborting."
                 exit 1
             fi
 
-            if ! sudo gpg --batch --yes --dearmor -o /etc/apt/keyrings/winehq-archive.key /tmp/winehq.key || [ ! -s /etc/apt/keyrings/winehq-archive.key ]; then
+            if ! sudo gpg --batch --yes --dearmor -o /etc/apt/keyrings/winehq-archive.key "$RUNTIME_DIR/winehq.key" || [ ! -s /etc/apt/keyrings/winehq-archive.key ]; then
                 echo "ERROR: failed to import WineHQ signing key into keyring. Aborting."
                 exit 1
             fi
@@ -488,11 +504,13 @@ export DISPLAY=":$VNC_DISPLAY"
 
 echo "Start noVNC on port $NOVNC_PORT"
 NOVNC_DIR="/usr/share/novnc"
-# Suffixed by VNC_PORT (not just a fixed name) since /tmp is shared
-# machine-wide — if this script is run under multiple OS users at once
-# (each with their own -v/-n/-b ports), fixed names here would have each
-# instance's stop_by_pidfile/log clobber another's.
-NOVNC_PID="/tmp/novnc-$VNC_PORT.pid"
+# Suffixed by VNC_PORT (not just a fixed name) — see the RUNTIME_DIR
+# comment at the top of the script for why this lives outside /tmp; the
+# VNC_PORT suffix on top of that is so multiple copies run by the same
+# user (each with their own -v/-n/-b ports) don't clobber each other's
+# pidfile/log.
+NOVNC_PID="$RUNTIME_DIR/novnc-$VNC_PORT.pid"
+NOVNC_LOG="$RUNTIME_DIR/novnc-$VNC_PORT.log"
 stop_by_pidfile "$NOVNC_PID"
 if [ -d "$NOVNC_DIR" ]; then
     # [::] gives dual-stack (v4+v6 on one socket) where IPv6 is available;
@@ -503,7 +521,7 @@ if [ -d "$NOVNC_DIR" ]; then
     else
         NOVNC_BIND="$NOVNC_PORT"
     fi
-    nohup websockify --web="$NOVNC_DIR" "$NOVNC_BIND" "localhost:$VNC_PORT" >"/tmp/novnc-$VNC_PORT.log" 2>&1 &
+    nohup websockify --web="$NOVNC_DIR" "$NOVNC_BIND" "localhost:$VNC_PORT" >"$NOVNC_LOG" 2>&1 &
     echo "$!" > "$NOVNC_PID"
 else
     echo "WARNING: novnc web assets not found at $NOVNC_DIR, adjust path"
@@ -514,23 +532,23 @@ WEBVIEW2_DIR="$WINEPREFIX/drive_c/Program Files (x86)/Microsoft/EdgeWebView/Appl
 
 echo "Download MetaTrader and WebView2 Runtime"
 if [ ! -f "$MT5_EXE" ]; then
-    if ! curl -fsSL "$URL_MT5" -o /tmp/mt5setup.exe || [ ! -s /tmp/mt5setup.exe ]; then
+    if ! curl -fsSL "$URL_MT5" -o "$RUNTIME_DIR/mt5setup.exe" || [ ! -s "$RUNTIME_DIR/mt5setup.exe" ]; then
         echo "ERROR: failed to download mt5setup.exe from $URL_MT5. Aborting."
         exit 1
     fi
 else
-    echo "mt5setup.exe already present, skipping download"
+    echo "MetaTrader 5 already installed, skipping download"
 fi
 
 # MT5's terminal embeds a Chromium view (Market tab, news, signals) via
 # WebView2 — without it those panels fail to render.
 if [ ! -d "$WEBVIEW2_DIR" ]; then
-    if ! curl -fsSL "$URL_WEBVIEW" -o /tmp/webview2.exe || [ ! -s /tmp/webview2.exe ]; then
+    if ! curl -fsSL "$URL_WEBVIEW" -o "$RUNTIME_DIR/webview2.exe" || [ ! -s "$RUNTIME_DIR/webview2.exe" ]; then
         echo "ERROR: failed to download webview2.exe from $URL_WEBVIEW. Aborting."
         exit 1
     fi
 else
-    echo "webview2.exe already present, skipping download"
+    echo "WebView2 Runtime already installed, skipping download"
 fi
 
 # Confirms display :$VNC_DISPLAY actually answers before running a Wine
@@ -614,7 +632,7 @@ if [ ! -d "$WEBVIEW2_DIR" ]; then
     # Exit code ignored deliberately: WebView2's bootstrapper can return
     # non-zero on a benign condition (e.g. reboot-suggested) even when
     # the install actually succeeded. Check the real outcome below instead.
-    wine /tmp/webview2.exe /silent /install || true
+    wine "$RUNTIME_DIR/webview2.exe" /silent /install || true
     if [ ! -d "$WEBVIEW2_DIR" ]; then
         echo "WARNING: WebView2 install did not produce $WEBVIEW2_DIR, continuing anyway"
     fi
@@ -628,7 +646,7 @@ if [ ! -f "$MT5_EXE" ]; then
     # Same reasoning as WebView2 above: mt5setup.exe is a bootstrapper
     # that can exit non-zero on a benign condition even when the actual
     # install succeeded. Check whether $MT5_EXE actually exists instead.
-    wine /tmp/mt5setup.exe /auto || true
+    wine "$RUNTIME_DIR/mt5setup.exe" /auto || true
     if [ ! -f "$MT5_EXE" ]; then
         echo "WARNING: MetaTrader 5 install did not produce $MT5_EXE, continuing anyway"
     fi
@@ -684,10 +702,10 @@ is_python_package_installed() {
 echo "Install Python in Wine"
 if ! wine python --version >/dev/null 2>&1; then
     wait_for_display
-    if ! curl -fsSL "$URL_PYTHON" -o /tmp/python-installer.exe || [ ! -s /tmp/python-installer.exe ]; then
+    if ! curl -fsSL "$URL_PYTHON" -o "$RUNTIME_DIR/python-installer.exe" || [ ! -s "$RUNTIME_DIR/python-installer.exe" ]; then
         echo "WARNING: failed to download Python-in-Wine installer, skipping pymt5linux bridge setup"
     else
-        wine /tmp/python-installer.exe /quiet InstallAllUsers=1 PrependPath=1 \
+        wine "$RUNTIME_DIR/python-installer.exe" /quiet InstallAllUsers=1 PrependPath=1 \
             || echo "WARNING: Python-in-Wine installer exited with an error, continuing anyway"
     fi
 else

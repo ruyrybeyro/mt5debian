@@ -252,9 +252,9 @@ exposes.
 Each copy needs its own OS user (own `$HOME`, own Wine prefix) and its own
 `-n`/`-v`/`-b` ports — pick a distinct set of three per user, e.g. user A
 gets the defaults (6080/5901/8001) and user B gets `-n 6081 -v 5902 -b
-8002`. The script's own log/PID files under `/tmp` are already namespaced
-by port, so they won't collide between copies even though `/tmp` itself is
-shared machine-wide.
+8002`. The script's own log/PID files live under a private per-user
+directory (see [Logs](#logs)), namespaced by port on top of that so
+multiple copies run by the same user don't collide either.
 
 That's process/filesystem separation by convention (distinct OS users),
 not a hard security boundary — see [SECURITY.md](SECURITY.md) for what
@@ -282,13 +282,21 @@ front of it if remote access is needed.
 
 ## Logs
 
-Filenames are suffixed by `VNC_PORT`, so each copy of the script (see
-[Running multiple copies](#running-multiple-copies)) gets its own:
+Logs, the noVNC pid file, and downloaded installers all live under a
+private per-user directory — `$XDG_RUNTIME_DIR/mt5debian` if
+`XDG_RUNTIME_DIR` is set (typical under a logind session), otherwise
+`$HOME/.cache/mt5debian`, created with mode `700`. Not `/tmp`: that's
+world-writable and shared machine-wide, so a predictable `/tmp` path is a
+symlink-attack target for any other local user — see
+[SECURITY.md](SECURITY.md).
 
-- `/tmp/novnc-<VNC_PORT>.log` — noVNC/websockify
-- `/tmp/mt5-terminal-<VNC_PORT>.log` — MT5 terminal stdout/stderr (deleted
+Filenames are further suffixed by `VNC_PORT`, so each copy of the script
+(see [Running multiple copies](#running-multiple-copies)) gets its own:
+
+- `novnc-<VNC_PORT>.log` — noVNC/websockify
+- `mt5-terminal-<VNC_PORT>.log` — MT5 terminal stdout/stderr (deleted
   once MT5 is confirmed running; kept if startup fails)
-- `/tmp/pymt5linux-server-<VNC_PORT>.log` — the bridge server (deleted
+- `pymt5linux-server-<VNC_PORT>.log` — the bridge server (deleted
   once the bridge port is confirmed open; kept if it fails to come up)
 
 ## Troubleshooting

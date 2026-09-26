@@ -1,5 +1,21 @@
 # Security Notes
 
+## Transient files live outside /tmp
+
+Downloaded installers, the noVNC pid file, and the terminal/bridge logs
+are all written under a private per-user directory —
+`$XDG_RUNTIME_DIR/mt5debian` when set, otherwise `$HOME/.cache/mt5debian`,
+created with mode `700` — rather than `/tmp`.
+
+`/tmp` is world-writable and shared machine-wide, so a predictable `/tmp`
+path (e.g. `/tmp/novnc-5901.pid`, or `/tmp/mt5setup.exe` in the window
+before it's handed to `wine`) is a symlink-attack target for any other
+local user: `stop_by_pidfile()`'s `kill "$(cat "$pidfile")"` trusts that
+file's content, and a downloaded installer redirected through a
+pre-planted symlink can be made to overwrite an arbitrary file the
+invoking user can write to. A private, mode-`700` directory that only
+this user can write into removes that attack surface entirely.
+
 ## Isolation between OS users running separate copies
 
 Running multiple copies of `mt5debian.sh` for different people on the same
