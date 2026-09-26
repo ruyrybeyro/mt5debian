@@ -257,8 +257,10 @@ URL_WEBVIEW="https://go.microsoft.com/fwlink/p/?LinkId=2124703"
 # pymt5linux (PyPI) requires Python >=3.13 on both the Wine and Linux
 # sides — using an older Windows Python here (e.g. 3.9.x) will make the
 # Wine-side "pip install pymt5linux" fail with the exact same version
-# error you'd see on Linux.
-URL_PYTHON="https://www.python.org/ftp/python/3.13.15/python-3.13.15-amd64.exe"
+# error you'd see on Linux. One obvious place to bump when pymt5linux
+# eventually requires a newer version.
+PYTHON_VERSION="3.13.15"
+URL_PYTHON="https://www.python.org/ftp/python/$PYTHON_VERSION/python-$PYTHON_VERSION-amd64.exe"
 
 # Suffixed by VNC_PORT, not a fixed name: RUNTIME_DIR is already private
 # per OS user, but two copies of this script run by the *same* user with
