@@ -47,6 +47,16 @@ if ! sudo -v; then
     exit 1
 fi
 
+# MT5 is an x86-64 Windows application, and the Python-in-Wine installer
+# downloaded further down is the amd64 build — this whole approach
+# assumes amd64 throughout, not just implicitly. Checked once here and
+# reused below (see NATIVE_ARCH) for the dpkg multiarch-ambiguity check.
+NATIVE_ARCH="$(dpkg --print-architecture)"
+if [ "$NATIVE_ARCH" != "amd64" ]; then
+    echo "ERROR: mt5debian.sh currently requires amd64 (got: $NATIVE_ARCH)" >&2
+    exit 1
+fi
+
 usage() {
     cat << 'USAGE'
 Usage: mt5debian.sh [-p|--password password] [-P|--viewonly-password password]
@@ -352,8 +362,8 @@ APT_PKGS=(
 # for Architecture:all packages like gnupg/novnc/python3-pip, which
 # dpkg records as :all and won't match an explicit :$NATIVE_ARCH
 # qualifier), falling back to the qualified form only if that fails —
-# which is exactly the ambiguous-multiarch case.
-NATIVE_ARCH="$(dpkg --print-architecture)"
+# which is exactly the ambiguous-multiarch case. NATIVE_ARCH itself was
+# already computed (and checked) near the top of the script.
 is_pkg_installed() {
     dpkg -s "$1" >/dev/null 2>&1 || dpkg -s "$1:$NATIVE_ARCH" >/dev/null 2>&1
 }
