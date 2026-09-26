@@ -194,6 +194,16 @@ WINEPREFIX="$HOME/.mt5"
 export WINEPREFIX
 
 if [ -n "$PURGE" ]; then
+    # Belt-and-braces guard on the rm -rf below: WINEPREFIX is hard-coded
+    # just above, so this can't fire today, but --purge is destructive
+    # enough that it's worth checking WINEPREFIX hasn't somehow ended up
+    # empty, "/", or pointing somewhere other than the prefix this
+    # script actually manages, rather than trusting that invariant
+    # silently forever.
+    if [[ -z "$WINEPREFIX" || "$WINEPREFIX" == "/" || "$WINEPREFIX" != "$HOME/.mt5" ]]; then
+        echo "ERROR: refusing to purge suspicious WINEPREFIX: $WINEPREFIX"
+        exit 1
+    fi
     echo "Purging existing Wine prefix ($WINEPREFIX)"
     wineserver -k 2>/dev/null || true
     rm -rf "$WINEPREFIX"
