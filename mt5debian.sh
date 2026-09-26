@@ -147,6 +147,46 @@ if [ -n "$VNC_PORT_OVERRIDE" ] && { ! is_valid_port "$VNC_PORT_OVERRIDE" || [ "$
     exit 1
 fi
 
+# noVNC web port — browse to http://localhost:$NOVNC_PORT/vnc.html
+# Override with -n/--novnc-port.
+if [ -n "$NOVNC_PORT_OVERRIDE" ]; then
+    NOVNC_PORT="$NOVNC_PORT_OVERRIDE"
+else
+    NOVNC_PORT="6080"
+fi
+
+# Raw VNC (RFB) port. Override with -v/--vnc-port. TigerVNC addresses
+# displays, not ports directly — port 5900+N is display :N — so the
+# display number used for vncserver/DISPLAY throughout is derived from
+# this rather than hardcoded, letting a second copy of this script run
+# under a different OS user on the same host without colliding on
+# either the display number or the port.
+if [ -n "$VNC_PORT_OVERRIDE" ]; then
+    VNC_PORT="$VNC_PORT_OVERRIDE"
+else
+    VNC_PORT="5901"
+fi
+VNC_DISPLAY="$((VNC_PORT - 5900))"
+
+# mt5linux bridge port. Override with -b/--bridge-port.
+if [ -n "$MT5SERVER_PORT_OVERRIDE" ]; then
+    MT5SERVER_PORT="$MT5SERVER_PORT_OVERRIDE"
+else
+    MT5SERVER_PORT="8001"
+fi
+
+# Three independent services bound to three configured ports — a
+# collision would mean one silently fails to bind (or worse, two
+# services fighting over the same port), so catch it up front rather
+# than as a confusing runtime failure later. Deliberately checked here,
+# before WINEPREFIX/--purge below: those have irreversible side effects
+# (deleting ~/.mt5), and shouldn't run ahead of a config error that's
+# going to abort the script anyway.
+if [ "$NOVNC_PORT" = "$VNC_PORT" ] || [ "$NOVNC_PORT" = "$MT5SERVER_PORT" ] || [ "$VNC_PORT" = "$MT5SERVER_PORT" ]; then
+    echo "ERROR: -n/--novnc-port, -v/--vnc-port, and -b/--bridge-port must all be different (got: $NOVNC_PORT, $VNC_PORT, $MT5SERVER_PORT)"
+    exit 1
+fi
+
 # Single source of truth for the Wine prefix path — every other spot in
 # this script that needs it (purge, prefix creation, MT5_EXE/WEBVIEW2_DIR
 # below) reads this instead of repeating the literal path.
@@ -173,27 +213,6 @@ URL_WEBVIEW="https://go.microsoft.com/fwlink/p/?LinkId=2124703"
 # error you'd see on Linux.
 URL_PYTHON="https://www.python.org/ftp/python/3.13.15/python-3.13.15-amd64.exe"
 
-# noVNC web port — browse to http://localhost:$NOVNC_PORT/vnc.html
-# Override with -n/--novnc-port.
-if [ -n "$NOVNC_PORT_OVERRIDE" ]; then
-    NOVNC_PORT="$NOVNC_PORT_OVERRIDE"
-else
-    NOVNC_PORT="6080"
-fi
-
-# Raw VNC (RFB) port. Override with -v/--vnc-port. TigerVNC addresses
-# displays, not ports directly — port 5900+N is display :N — so the
-# display number used for vncserver/DISPLAY throughout is derived from
-# this rather than hardcoded, letting a second copy of this script run
-# under a different OS user on the same host without colliding on
-# either the display number or the port.
-if [ -n "$VNC_PORT_OVERRIDE" ]; then
-    VNC_PORT="$VNC_PORT_OVERRIDE"
-else
-    VNC_PORT="5901"
-fi
-VNC_DISPLAY="$((VNC_PORT - 5900))"
-
 # Suffixed by VNC_PORT, not a fixed name: RUNTIME_DIR is already private
 # per OS user, but two copies of this script run by the *same* user with
 # different ports (e.g. for testing) would otherwise still collide on
@@ -214,22 +233,6 @@ fi
 
 # mt5linux bridge — lets external Python code drive the terminal via RPyC.
 # Port matches the FreeBSD mt5jail bridge for consistency by default.
-# Override with -b/--bridge-port.
-if [ -n "$MT5SERVER_PORT_OVERRIDE" ]; then
-    MT5SERVER_PORT="$MT5SERVER_PORT_OVERRIDE"
-else
-    MT5SERVER_PORT="8001"
-fi
-
-# Three independent services bound to three configured ports — a
-# collision would mean one silently fails to bind (or worse, two
-# services fighting over the same port), so catch it up front rather
-# than as a confusing runtime failure later.
-if [ "$NOVNC_PORT" = "$VNC_PORT" ] || [ "$NOVNC_PORT" = "$MT5SERVER_PORT" ] || [ "$VNC_PORT" = "$MT5SERVER_PORT" ]; then
-    echo "ERROR: -n/--novnc-port, -v/--vnc-port, and -b/--bridge-port must all be different (got: $NOVNC_PORT, $VNC_PORT, $MT5SERVER_PORT)"
-    exit 1
-fi
-
 # Suffixed by VNC_PORT (not MT5SERVER_PORT) for consistency with
 # MT5_TERMINAL_LOG/NOVNC_PID above/below: same reason.
 PYMT5LINUX_LOG="$RUNTIME_DIR/pymt5linux-server-$VNC_PORT.log"
