@@ -269,11 +269,15 @@ run_check() {
         # mask a real failure by taking `local`'s own exit status
         # instead. But that means this assignment's own exit status
         # (the pipeline's, under pipefail) is what set -e sees — and
-        # grep -o legitimately exits 1 on a no-match here (an expected,
+        # grep legitimately exits 1 on a no-match here (an expected,
         # handled case: see the ${winver:-...} fallback below), which
         # would otherwise silently kill the whole script right here.
+        # Match on "windows" anywhere in the line rather than a specific
+        # bracketed "[Version ...]" format: observed `ver` output varies
+        # across Wine builds (e.g. wine-staging 11.18 prints a bare
+        # "Microsoft Windows 10.0.19045", no brackets at all).
         local winver
-        winver="$(wine cmd /c ver 2>/dev/null | tr -d '\r' | grep -o '\[Version[^]]*\]')" || true
+        winver="$(wine cmd /c ver 2>/dev/null | tr -d '\r' | grep -i windows | head -1)" || true
         row "Windows version:" "${winver:-unknown (prefix not booted yet?)}"
     else
         row "Windows version:" "n/a"
