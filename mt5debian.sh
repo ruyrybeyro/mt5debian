@@ -473,7 +473,7 @@ APT_PKGS=(
 # installed under multiple architectures (which wine32:i386 causes for
 # some of these — libgl1, libglx-mesa0) — dpkg then exits 2, not 0/1,
 # even though the package genuinely is installed. Try bare first (needed
-# for Architecture:all packages like gnupg/novnc/python3-pip, which
+# for Architecture:all packages like gnupg/novnc/python3-venv, which
 # dpkg records as :all and won't match an explicit :$NATIVE_ARCH
 # qualifier), falling back to the qualified form only if that fails —
 # which is exactly the ambiguous-multiarch case. NATIVE_ARCH itself was
