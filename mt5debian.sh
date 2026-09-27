@@ -276,9 +276,22 @@ run_check() {
         # bracketed "[Version ...]" format: observed `ver` output varies
         # across Wine builds (e.g. wine-staging 11.18 prints a bare
         # "Microsoft Windows 10.0.19045", no brackets at all).
-        local winver
+        local winver build friendly=""
         winver="$(wine cmd /c ver 2>/dev/null | tr -d '\r' | grep -i windows | head -1)" || true
-        row "Windows version:" "${winver:-unknown (prefix not booted yet?)}"
+        # Windows 10 and 11 report the same "10.0" NT kernel version,
+        # differentiated only by build number (>= 22000 is Windows 11)
+        # — translate that rather than showing an unexplained raw
+        # "10.0.22000" (this script always configures win11, so seeing
+        # "(Windows 10)" here would itself be a sign something's off).
+        if [[ "$winver" =~ 10\.0\.([0-9]+) ]]; then
+            build="${BASH_REMATCH[1]}"
+            if [ "$build" -ge 22000 ]; then
+                friendly=" (Windows 11)"
+            else
+                friendly=" (Windows 10)"
+            fi
+        fi
+        row "Windows version:" "${winver:-unknown (prefix not booted yet?)}$friendly"
     else
         row "Windows version:" "n/a"
     fi
