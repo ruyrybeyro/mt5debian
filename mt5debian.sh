@@ -264,8 +264,16 @@ run_check() {
     fi
 
     if [ -d "$WINEPREFIX" ] && command -v wine >/dev/null 2>&1; then
+        # `local winver` and this assignment are deliberately two
+        # statements, not `local winver=$(...)`: combining them would
+        # mask a real failure by taking `local`'s own exit status
+        # instead. But that means this assignment's own exit status
+        # (the pipeline's, under pipefail) is what set -e sees — and
+        # grep -o legitimately exits 1 on a no-match here (an expected,
+        # handled case: see the ${winver:-...} fallback below), which
+        # would otherwise silently kill the whole script right here.
         local winver
-        winver="$(wine cmd /c ver 2>/dev/null | tr -d '\r' | grep -o '\[Version[^]]*\]')"
+        winver="$(wine cmd /c ver 2>/dev/null | tr -d '\r' | grep -o '\[Version[^]]*\]')" || true
         row "Windows version:" "${winver:-unknown (prefix not booted yet?)}"
     else
         row "Windows version:" "n/a"
