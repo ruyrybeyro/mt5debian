@@ -279,14 +279,20 @@ run_check() {
         local winver build friendly=""
         winver="$(wine cmd /c ver 2>/dev/null | tr -d '\r' | grep -i windows | head -1)" || true
         # Windows 10 and 11 report the same "10.0" NT kernel version,
-        # differentiated only by build number (>= 22000 is Windows 11)
-        # — translate that rather than showing an unexplained raw
+        # differentiated only by build number (>= 22000 is Windows 11) —
+        # translate that rather than showing an unexplained raw
         # "10.0.22000" (this script always configures win11, so seeing
         # "(Windows 10)" here would itself be a sign something's off).
+        # "or newer", not a bare "(Windows 11)": a single build-number
+        # floor can't tell Windows 11 apart from whatever Microsoft ships
+        # after it, if that also keeps reporting itself as NT 10.0 with
+        # an even higher build (as Windows 11 itself did versus 10) —
+        # this script shouldn't need an update just because a future
+        # Windows release exists.
         if [[ "$winver" =~ 10\.0\.([0-9]+) ]]; then
             build="${BASH_REMATCH[1]}"
             if [ "$build" -ge 22000 ]; then
-                friendly=" (Windows 11)"
+                friendly=" (Windows 11 or newer)"
             else
                 friendly=" (Windows 10)"
             fi
